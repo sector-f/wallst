@@ -1,217 +1,163 @@
 extern crate clap;
 extern crate image;
-extern crate rand;
+extern crate regex;
 extern crate xcb;
 extern crate xcb_util as xcbu;
 
+mod xorg;
+
 use clap::{App, Arg};
 use image::*;
-use rand::{thread_rng, Rng};
-use std::env::args_os;
-use std::fs::read_dir;
-use std::io::{stderr, Write};
+use std::u8;
+use std::io::{Read, stdin};
 use std::path::{Path, PathBuf};
-use std::thread::sleep;
-use std::time::Duration;
+use xorg::*;
 
-const ATOMS: &'static [&'static str] = &[
-    "_XROOTPMAP_ID",
-    "_XSETROOT_ID",
-    "ESETROOT_PMAP_ID"
-];
+#[derive(Clone, Copy)]
+struct BackgroundOptions {
+    mode: BackgroundMode,
+    vflip: bool,
+    hflip: bool,
+}
 
+#[derive(Clone, Copy)]
 enum BackgroundMode {
-    Center,  // Center on background. Preserve aspect ratio.
+    // Center,  // Center on background. Preserve aspect ratio.
              // If it's too small, surround with black.
              // See feh's --bg-center
 
     Stretch, // Force image to fit to screen. Do not
              // preserve aspect ratio. See feh's --bg-scale
 
-    Fill,    // Like Stretch, but preserve aspect ratio.
-             // Zoom image until it fits. Either a horizontal
-             // or vertical section will be cut off.
+    // Fill,    // Like Stretch, but preserve aspect ratio.
+             // Scale image until it fits, and then center.
+             // Either a horizontal or vertical section will
+             // be cut off.
 
-    Tile,    // Put image in top-left of screen.
+    // Tile,    // Put image in top-left of screen.
              // Repeat left-to-right if it is too small.
 }
 
-fn clean_root_atoms(conn: &xcb::Connection,
-                  screen: &xcb::Screen) {
-    let ids = ATOMS.iter().map(|atom| {
-        let reply = xcb::get_property(conn, false, screen.root(),
-            xcb::intern_atom(conn, false, atom).get_reply().expect("failed to intern atom").atom(),
-            xcb::ATOM_PIXMAP, 0, 1).get_reply();
-
-        match reply {
-            Ok(ref reply) if reply.type_() == xcb::ATOM_PIXMAP => {
-                Some(reply.value()[0])
-            },
-            _ => None,
-        }
-    }).collect::<Vec<Option<xcb::Pixmap>>>();
-
-    if ids.iter().all(Option::is_some) && ids.iter().all(|id| id == ids.first().unwrap()) {
-        xcb::kill_client(conn, ids.first().unwrap().unwrap());
-    }
-
-    xcb::kill_client(conn, xcb::KILL_ALL_TEMPORARY);
-    xcb::set_close_down_mode(conn, xcb::CLOSE_DOWN_RETAIN_TEMPORARY as u8);
-}
-
-fn set_background(conn: &xcb::Connection,
-                  screen: &xcb::Screen,
-                  image: &image::DynamicImage) {
-    let w = screen.width_in_pixels();
-    let h = screen.height_in_pixels();
-
-    let mut shm = xcbu::image::shm::create(&conn, screen.root_depth(), w, h)
-        .expect("Failed to create shm");
-
-    for (x, y, pixel) in image.pixels() {
-        let r = pixel[0] as u32;
-        let g = pixel[1] as u32;
-        let b = pixel[2] as u32;
-        shm.put(x, y, ((r << 16) | (g << 8) | (b << 0)));
-    }
-
-    let pixmap_id = conn.generate_id();
-    xcb::create_pixmap(&conn, screen.root_depth(), pixmap_id, screen.root(), w, h);
-
-    let context = conn.generate_id();
-    xcb::create_gc(&conn, context, pixmap_id, &[]);
-
-    xcbu::image::shm::put(&conn,
-                          pixmap_id,
-                          context,
-                          &shm,
-                          0,
-                          0,
-                          0,
-                          0,
-                          w as u16,
-                          h as u16,
-                          false).unwrap();
-
-    clean_root_atoms(&conn, &screen);
-    for atom in ATOMS {
-            xcb::change_property(conn, xcb::PROP_MODE_REPLACE as u8, screen.root(),
-                xcb::intern_atom(conn, false, atom).get_reply().expect("failed to intern atom").atom(),
-                xcb::ATOM_PIXMAP, 32, &[pixmap_id]);
-    }
-    xcb::kill_client(&conn, xcb::KILL_ALL_TEMPORARY);
-    xcb::set_close_down_mode(&conn, xcb::CLOSE_DOWN_RETAIN_TEMPORARY as u8);
-    xcb::change_window_attributes(&conn, screen.root(), &[(xcb::CW_BACK_PIXMAP, pixmap_id)]);
-    xcb::clear_area(&conn, false, screen.root(), 0, 0, w, h);
-    conn.flush();
-}
-
 fn get_image_data(path: &Path,
-                  mode: &BackgroundMode,
+                  options: BackgroundOptions,
                   w: u32,
                   h: u32) -> Result<image::DynamicImage, ImageError> {
-    let image = try!(open(path));
-    match mode {
-        &BackgroundMode::Center => {},
-        &BackgroundMode::Stretch => {
-                return Ok(image.resize_exact(w, h, FilterType::Lanczos3))
+    let dash = PathBuf::from("-");
+    let mut image = if path == &dash {
+        let mut buffer = Vec::new();
+        let _ = stdin().read_to_end(&mut buffer);
+        try!(load_from_memory(&buffer))
+    } else {
+        try!(open(path))
+    };
+
+    match options.mode {
+        // BackgroundMode::Center => {},
+        BackgroundMode::Stretch => {
+                image = image.resize_exact(w, h, FilterType::Lanczos3);
         },
-        &BackgroundMode::Fill => {
-                return Ok(image.resize(w, h, FilterType::Lanczos3))
-        }
-        &BackgroundMode::Tile => {},
+        // BackgroundMode::Fill => {
+                // return Ok(image.resize(w, h, FilterType::Lanczos3))
+        // }
+        // BackgroundMode::Tile => {},
+    }
+
+    if options.vflip {
+        image = image.flipv();
+    }
+
+    if options.hflip {
+        image = image.fliph();
     }
 
     Ok(image)
 }
 
-fn set_random_loop(mut paths: Vec<PathBuf>,
-                   mode: &BackgroundMode,
-                   delay: u64,
-                   conn: &xcb::Connection,
-                   screen: &xcb::Screen) {
-    let mut rng = thread_rng();
-
-    let w = screen.width_in_pixels();
-    let h = screen.height_in_pixels();
-    loop {
-        rng.shuffle(&mut paths);
-        for path in &paths {
-            if let Ok(image) = get_image_data(path, mode, w as u32, h as u32) {
-                set_background(conn, screen, &image);
-                sleep(Duration::from_secs(delay));
-            }
-        }
+fn is_valid_color(color: String) -> Result<(), String> {
+    let regex = regex::Regex::new(r"#[:xdigit:]{6}").unwrap();
+    match regex.is_match(&color) {
+        true => Ok(()),
+        false => Err(("Colors must be in the form of #rrggbb".to_owned())),
     }
 }
 
-fn set_in_loop(paths: Vec<PathBuf>,
-               mode: &BackgroundMode,
-               delay: u64,
-               conn: &xcb::Connection,
-               screen: &xcb::Screen) {
-    let w = screen.width_in_pixels();
-    let h = screen.height_in_pixels();
-    loop {
-        for path in &paths {
-            if let Ok(image) = get_image_data(path, mode, w as u32, h as u32) {
-                set_background(conn, screen, &image);
-                sleep(Duration::from_secs(delay));
-            }
+fn get_solid_color(color_str: &str, w: u32, h:u32) -> Result<DynamicImage, ()> {
+    let (r, g, b) = (
+        u8::from_str_radix(&color_str[1..3], 16).unwrap(),
+        u8::from_str_radix(&color_str[3..5], 16).unwrap(),
+        u8::from_str_radix(&color_str[5..7], 16).unwrap(),
+    );
+
+    let color = Rgba::from_channels(r, g, b, 255);
+    // println!("{}", &color_str[1..2]);
+    // println!("{}", &color_str[3..4]);
+    // println!("{}", &color_str[5..6]);
+    // println!("{:?}", color);
+    let mut image = DynamicImage::new_rgba8(w, h);
+    for x in 0..image.width() {
+        for y in 0..image.height() {
+            image.put_pixel(x, y, color);
         }
     }
-}
 
-fn get_images_vec(args_vec: &[PathBuf]) -> Vec<PathBuf> {
-    let mut images: Vec<PathBuf> = Vec::new();
-
-    for path in args_vec {
-        if path.is_file() {
-            images.push(path.to_owned());
-        } else if path.is_dir() {
-            if let Ok(contents) = read_dir(path) {
-                for direntry_result in contents {
-                    if let Ok(direntry) = direntry_result {
-                        images.push(direntry.path());
-                    }
-                }
-            }
-        }
-    }
-    images
-}
-
-fn get_screen(conn: &xcb::Connection, display: usize) -> xcb::Screen {
-    let setup = conn.get_setup();
-    let mut screen_iter = setup.roots();
-    let screen = screen_iter.nth(display).expect("Failed to get screen info");
-    return screen
+    Ok(image)
 }
 
 fn main() {
-    let (conn, screen_num) = xcb::Connection::connect(None).expect("Failed to connect to X server");
+    let matches = App::new("wallpaper")
+        .version(option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"))
+        .about("Sets the root window")
+        .arg(Arg::with_name("display")
+             .help("Which display to set the wallpaper of")
+             .short("d")
+             .long("display")
+             .takes_value(true))
+        .arg(Arg::with_name("vflip")
+             .help("Flip the image vertically")
+             .long("vflip"))
+        .arg(Arg::with_name("hflip")
+             .help("Flip the image horizontally")
+             .long("hflip"))
+        .arg(Arg::with_name("stretch")
+             .help("Stretch image to fit to screen (default)")
+             .short("s")
+             .long("stretch"))
+        .arg(Arg::with_name("color")
+             .help("Set a solid color as the background")
+             .short("c")
+             .long("color")
+             .validator(is_valid_color)
+             .takes_value(true))
+        .arg(Arg::with_name("image")
+             .help("The image to use as the background. Use - for stdin")
+             .required_unless("color")
+             .index(1))
+        .get_matches();
+
+    let (conn, screen_num) = xcb::Connection::connect(matches.value_of("display"))
+        .expect("Failed to connect to X server");
     let screen = get_screen(&conn, screen_num as usize);
+    let w = screen.width_in_pixels();
+    let h = screen.height_in_pixels();
 
-    let arguments = args_os().skip(1).map(PathBuf::from).collect::<Vec<PathBuf>>();
-    let images = get_images_vec(&arguments);
+    if let Some(color_string) = matches.value_of("color") {
+        if let Ok(color) = get_solid_color(&color_string, w as u32, h as u32) {
+            set_background(&conn, &screen, &color);
+        }
+    } else if let Some(image) = matches.value_of_os("image") {
+        let mode = if matches.is_present("stretch") {
+                BackgroundMode::Stretch
+        } else {
+                BackgroundMode::Stretch
+        };
 
-    let mode = BackgroundMode::Stretch;
-
-    match images.len() {
-        0 => {
-            let _ = writeln!(stderr(), "No images found");
-        },
-        1 => {
-            if let Ok(image) = get_image_data(&images[0],
-                                              &mode,
-                                              screen.width_in_pixels() as u32,
-                                              screen.height_in_pixels() as u32) {
-                set_background(&conn, &screen, &image,);
-            }
-        },
-        _ => {
-            set_in_loop(images, &mode, 1, &conn, &screen);
-            // set_random_loop(images, &mode, 1, &conn, &screen);
-        },
+        let bg_options = BackgroundOptions {
+            mode : mode,
+            vflip: matches.is_present("vflip"),
+            hflip: matches.is_present("hflip"),
+        };
+        if let Ok(image) = get_image_data(&Path::new(image), bg_options, w as u32, h as u32) {
+            set_background(&conn, &screen, &image);
+        }
     }
 }

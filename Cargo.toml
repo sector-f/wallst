@@ -4,12 +4,10 @@ version = "0.1.0"
 authors = ["Adam <adamsimeth@gmail.com>"]
 
 [dependencies]
-rand = "0.3.*"
-image = "0.10.*"
 clap = "2.9.*"
+image = "0.10.*"
+regex = "0.1"
 xcb = "0.7.*"
-# xcb-util = "0.1"
-# byteorder = "0.5.*"
 
 [dependencies.xcb-util]
 version = "0.1"
