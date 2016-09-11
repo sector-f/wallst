@@ -18,6 +18,7 @@ struct BackgroundOptions {
     mode: BackgroundMode,
     vflip: bool,
     hflip: bool,
+    // save_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy)]
@@ -29,7 +30,7 @@ enum BackgroundMode {
     Stretch, // Force image to fit to screen. Do not
              // preserve aspect ratio. See feh's --bg-scale
 
-    // Fill,    // Like Stretch, but preserve aspect ratio.
+    Fill,    // Like Stretch, but preserve aspect ratio.
              // Scale image until it fits, and then center.
              // Either a horizontal or vertical section will
              // be cut off.
@@ -52,13 +53,20 @@ fn get_image_data(path: &Path,
     };
 
     match options.mode {
-        // BackgroundMode::Center => {},
+        // BackgroundMode::Center => {
+            // image = DynamicImage::ImageRgba8(image.sub_image(0, 0, w, h).to_image());
+        // },
         BackgroundMode::Stretch => {
-                image = image.resize_exact(w, h, FilterType::Lanczos3);
+            image = image.resize_exact(w, h, FilterType::Lanczos3);
         },
-        // BackgroundMode::Fill => {
-                // return Ok(image.resize(w, h, FilterType::Lanczos3))
-        // }
+        BackgroundMode::Fill => {
+            let bg_color = Rgba::from_channels(0, 0, 0, 255);
+            let mut bg_image = ImageBuffer::from_pixel(w, h, bg_color);
+            image = image.resize(w, h, FilterType::Lanczos3);
+            let offset = (w - image.width()) / 2;
+            bg_image.copy_from(&image, offset, 0);
+            image = DynamicImage::ImageRgba8(bg_image);
+        },
         // BackgroundMode::Tile => {},
     }
 
@@ -74,7 +82,7 @@ fn get_image_data(path: &Path,
 }
 
 fn is_valid_color(color: String) -> Result<(), String> {
-    let regex = regex::Regex::new(r"#[:xdigit:]{6}").unwrap();
+    let regex = regex::Regex::new(r"^#[:xdigit:]{6}$").unwrap();
     match regex.is_match(&color) {
         true => Ok(()),
         false => Err(("Colors must be in the form of #rrggbb".to_owned())),
@@ -88,19 +96,8 @@ fn get_solid_color(color_str: &str, w: u32, h:u32) -> Result<DynamicImage, ()> {
         u8::from_str_radix(&color_str[5..7], 16).unwrap(),
     );
 
-    let color = Rgba::from_channels(r, g, b, 255);
-    // println!("{}", &color_str[1..2]);
-    // println!("{}", &color_str[3..4]);
-    // println!("{}", &color_str[5..6]);
-    // println!("{:?}", color);
-    let mut image = DynamicImage::new_rgba8(w, h);
-    for x in 0..image.width() {
-        for y in 0..image.height() {
-            image.put_pixel(x, y, color);
-        }
-    }
-
-    Ok(image)
+    let color = Rgb::from_channels(r, g, b, 255);
+    Ok(DynamicImage::ImageRgb8(ImageBuffer::from_pixel(w, h, color)))
 }
 
 fn main() {
@@ -122,6 +119,11 @@ fn main() {
              .help("Stretch image to fit to screen (default)")
              .short("s")
              .long("stretch"))
+        .arg(Arg::with_name("fill")
+             .help("Fill image to fit to screen without distorting")
+             .short("f")
+             .long("fill")
+             .conflicts_with("stretch"))
         .arg(Arg::with_name("color")
              .help("Set a solid color as the background")
              .short("c")
@@ -147,6 +149,8 @@ fn main() {
     } else if let Some(image) = matches.value_of_os("image") {
         let mode = if matches.is_present("stretch") {
                 BackgroundMode::Stretch
+        } else if matches.is_present("fill") {
+                BackgroundMode::Fill
         } else {
                 BackgroundMode::Stretch
         };
@@ -155,6 +159,7 @@ fn main() {
             mode : mode,
             vflip: matches.is_present("vflip"),
             hflip: matches.is_present("hflip"),
+            // save_path: None,
         };
         if let Ok(image) = get_image_data(&Path::new(image), bg_options, w as u32, h as u32) {
             set_background(&conn, &screen, &image);
