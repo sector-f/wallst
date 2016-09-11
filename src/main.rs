@@ -10,18 +10,22 @@ use clap::{App, Arg};
 use image::*;
 use std::u8;
 use std::io::{Read, stdin};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use xorg::*;
 
-#[derive(Clone, Copy)]
+// #[derive(Clone, Copy)]
 struct BackgroundOptions {
+    path: Option<PathBuf>,
+    color: Option<String>,
+    w: u32,
+    h: u32,
     mode: BackgroundMode,
     vflip: bool,
     hflip: bool,
     // save_path: Option<PathBuf>,
 }
 
-#[derive(Clone, Copy)]
+// #[derive(Clone, Copy)]
 enum BackgroundMode {
     // Center,  // Center on background. Preserve aspect ratio.
              // If it's too small, surround with black.
@@ -39,42 +43,50 @@ enum BackgroundMode {
              // Repeat left-to-right if it is too small.
 }
 
-fn get_image_data(path: &Path,
-                  options: BackgroundOptions,
-                  w: u32,
-                  h: u32) -> Result<image::DynamicImage, ImageError> {
-    let dash = PathBuf::from("-");
-    let mut image = if path == &dash {
+fn get_image_data(bg: &BackgroundOptions) -> Result<image::DynamicImage, ImageError> {
+    let mut image = if bg.path == Some(PathBuf::from("-")) {
         let mut buffer = Vec::new();
         let _ = stdin().read_to_end(&mut buffer);
         try!(load_from_memory(&buffer))
-    } else {
+    } else if let Some(ref path) = bg.path {
         try!(open(path))
+    } else if let Some(ref color) = bg.color {
+        get_solid_image(&color, bg.w, bg.h)
+    } else {
+        unreachable!()
     };
 
-    match options.mode {
-        // BackgroundMode::Center => {
-            // image = DynamicImage::ImageRgba8(image.sub_image(0, 0, w, h).to_image());
-        // },
+    match bg.mode {
+        // BackgroundMode::Center => {},
         BackgroundMode::Stretch => {
-            image = image.resize_exact(w, h, FilterType::Lanczos3);
+            image = image.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
         },
         BackgroundMode::Fill => {
-            let bg_color = Rgba::from_channels(0, 0, 0, 255);
-            let mut bg_image = ImageBuffer::from_pixel(w, h, bg_color);
-            image = image.resize(w, h, FilterType::Lanczos3);
-            let offset = (w - image.width()) / 2;
+            let bg_color = if let Some(ref color) = bg.color {
+                let (r, g, b) = (
+                    u8::from_str_radix(&color[1..3], 16).unwrap(),
+                    u8::from_str_radix(&color[3..5], 16).unwrap(),
+                    u8::from_str_radix(&color[5..7], 16).unwrap(),
+                );
+
+                Rgba::from_channels(r, g, b, 255)
+            } else {
+                Rgba::from_channels(0, 0, 0, 255)
+            };
+            let mut bg_image = ImageBuffer::from_pixel(bg.w, bg.h, bg_color);
+            image = image.resize(bg.w, bg.h, FilterType::Lanczos3);
+            let offset = (bg.w - image.width()) / 2;
             bg_image.copy_from(&image, offset, 0);
             image = DynamicImage::ImageRgba8(bg_image);
         },
         // BackgroundMode::Tile => {},
     }
 
-    if options.vflip {
+    if bg.vflip {
         image = image.flipv();
     }
 
-    if options.hflip {
+    if bg.hflip {
         image = image.fliph();
     }
 
@@ -89,7 +101,7 @@ fn is_valid_color(color: String) -> Result<(), String> {
     }
 }
 
-fn get_solid_color(color_str: &str, w: u32, h:u32) -> Result<DynamicImage, ()> {
+fn get_solid_image(color_str: &str, w: u32, h:u32) -> DynamicImage {
     let (r, g, b) = (
         u8::from_str_radix(&color_str[1..3], 16).unwrap(),
         u8::from_str_radix(&color_str[3..5], 16).unwrap(),
@@ -97,11 +109,11 @@ fn get_solid_color(color_str: &str, w: u32, h:u32) -> Result<DynamicImage, ()> {
     );
 
     let color = Rgb::from_channels(r, g, b, 255);
-    Ok(DynamicImage::ImageRgb8(ImageBuffer::from_pixel(w, h, color)))
+    DynamicImage::ImageRgb8(ImageBuffer::from_pixel(w, h, color))
 }
 
 fn main() {
-    let matches = App::new("wallpaper")
+    let matches = App::new("wallst")
         .version(option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"))
         .about("Sets the root window")
         .arg(Arg::with_name("display")
@@ -142,27 +154,58 @@ fn main() {
     let w = screen.width_in_pixels();
     let h = screen.height_in_pixels();
 
-    if let Some(color_string) = matches.value_of("color") {
-        if let Ok(color) = get_solid_color(&color_string, w as u32, h as u32) {
-            set_background(&conn, &screen, &color);
-        }
-    } else if let Some(image) = matches.value_of_os("image") {
-        let mode = if matches.is_present("stretch") {
-                BackgroundMode::Stretch
-        } else if matches.is_present("fill") {
-                BackgroundMode::Fill
-        } else {
-                BackgroundMode::Stretch
-        };
+    let path = matches.value_of_os("image").map(|p| PathBuf::from(p));
 
-        let bg_options = BackgroundOptions {
-            mode : mode,
-            vflip: matches.is_present("vflip"),
-            hflip: matches.is_present("hflip"),
-            // save_path: None,
-        };
-        if let Ok(image) = get_image_data(&Path::new(image), bg_options, w as u32, h as u32) {
-            set_background(&conn, &screen, &image);
-        }
+    let mode = if matches.is_present("stretch") {
+            BackgroundMode::Stretch
+    } else if matches.is_present("fill") {
+            BackgroundMode::Fill
+    } else {
+            BackgroundMode::Stretch
+    };
+
+    let color = matches.value_of("color").map(|c| c.to_string());
+
+    let bg_options = BackgroundOptions {
+        path: path,
+        color: color,
+        w: w as u32,
+        h: h as u32,
+        mode : mode,
+        vflip: matches.is_present("vflip"),
+        hflip: matches.is_present("hflip"),
+        // save_path: None,
+    };
+
+    if let Ok(image) = get_image_data(&bg_options) {
+        set_background(&conn, &screen, &image);
     }
+
+
+    // if let Some(color_string) = matches.value_of("color") {
+    //     let image = get_solid_image(&color_string, w as u32, h as u32);
+    //     set_background(&conn, &screen, &image);
+    // } else if let Some(image) = matches.value_of_os("image") {
+    //     let mode = if matches.is_present("stretch") {
+    //             BackgroundMode::Stretch
+    //     } else if matches.is_present("fill") {
+    //             BackgroundMode::Fill
+    //     } else {
+    //             BackgroundMode::Stretch
+    //     };
+
+    //     let bg_options = BackgroundOptions {
+    //         path: Some(PathBuf::from(image)),
+    //         color: None,
+    //         w: w as u32,
+    //         h: h as u32,
+    //         mode : mode,
+    //         vflip: matches.is_present("vflip"),
+    //         hflip: matches.is_present("hflip"),
+    //         save_path: None,
+    //     };
+    //     if let Ok(image) = get_image_data(&bg_options) {
+    //         set_background(&conn, &screen, &image);
+    //     }
+    // }
 }

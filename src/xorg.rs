@@ -11,7 +11,7 @@ const ATOMS: &'static [&'static str] = &[
 ];
 
 pub fn clean_root_atoms(conn: &xcb::Connection,
-                  screen: &xcb::Screen) {
+                        screen: &xcb::Screen) {
     let ids = ATOMS.iter().map(|atom| {
         let reply = xcb::get_property(&conn, false, screen.root(),
             xcb::intern_atom(&conn, false, atom).get_reply().expect("failed to intern atom").atom(),
@@ -34,8 +34,8 @@ pub fn clean_root_atoms(conn: &xcb::Connection,
 }
 
 pub fn set_background(conn: &xcb::Connection,
-                  screen: &xcb::Screen,
-                  image: &image::DynamicImage) {
+                      screen: &xcb::Screen,
+                      image: &DynamicImage) {
     let w = screen.width_in_pixels();
     let h = screen.height_in_pixels();
 
