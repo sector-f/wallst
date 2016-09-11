@@ -180,32 +180,4 @@ fn main() {
     if let Ok(image) = get_image_data(&bg_options) {
         set_background(&conn, &screen, &image);
     }
-
-
-    // if let Some(color_string) = matches.value_of("color") {
-    //     let image = get_solid_image(&color_string, w as u32, h as u32);
-    //     set_background(&conn, &screen, &image);
-    // } else if let Some(image) = matches.value_of_os("image") {
-    //     let mode = if matches.is_present("stretch") {
-    //             BackgroundMode::Stretch
-    //     } else if matches.is_present("fill") {
-    //             BackgroundMode::Fill
-    //     } else {
-    //             BackgroundMode::Stretch
-    //     };
-
-    //     let bg_options = BackgroundOptions {
-    //         path: Some(PathBuf::from(image)),
-    //         color: None,
-    //         w: w as u32,
-    //         h: h as u32,
-    //         mode : mode,
-    //         vflip: matches.is_present("vflip"),
-    //         hflip: matches.is_present("hflip"),
-    //         save_path: None,
-    //     };
-    //     if let Ok(image) = get_image_data(&bg_options) {
-    //         set_background(&conn, &screen, &image);
-    //     }
-    // }
 }
