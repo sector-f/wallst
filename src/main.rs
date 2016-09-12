@@ -27,8 +27,8 @@ struct BackgroundOptions {
 
 // #[derive(Clone, Copy)]
 enum BackgroundMode {
-    // Center,  // Center on background. Preserve aspect ratio.
-             // If it's too small, surround with black.
+    Center,  // Center on background. Preserve aspect ratio.
+             // If it's too small, surround with background color.
              // See feh's --bg-center
 
     Stretch, // Force image to fit to screen. Do not
@@ -38,6 +38,9 @@ enum BackgroundMode {
              // Scale image until it fits, and then center.
              // Either a horizontal or vertical section will
              // be cut off.
+
+    Full,    // Place image in top-left of screen with no
+             // modifications.
 
     // Tile,    // Put image in top-left of screen.
              // Repeat left-to-right if it is too small.
@@ -57,27 +60,48 @@ fn get_image_data(bg: &BackgroundOptions) -> Result<image::DynamicImage, ImageEr
     };
 
     match bg.mode {
-        // BackgroundMode::Center => {},
+        BackgroundMode::Center => {
+            let img_w = image.width();
+            let img_h = image.height();
+            let bg_w = bg.w;
+            let bg_h = bg.h;
+
+            let bg_color = bg.color.to_owned().unwrap_or("#000000".to_owned());
+            let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
+
+            let left: i32 = (bg_w as i32 - img_w as i32) / 2;
+            let top: i32 = (bg_h as i32 - img_h as i32) / 2;
+
+            let mut image_copy = image;
+            let sub_image = image_copy.sub_image(
+                if left < 0 { left.abs() as u32 } else { 0 },
+                if top < 0 { top.abs() as u32 } else { 0 },
+                if left < 0 { bg_w } else { img_w },
+                if top < 0 { bg_h } else { img_h },
+            );
+
+            bg_image.copy_from(&sub_image,
+                               if left < 0 { 0 } else { left.abs() as u32 },
+                               if top < 0 { 0 } else { top.abs() as u32 });
+            image = bg_image;
+        },
         BackgroundMode::Stretch => {
             image = image.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
         },
         BackgroundMode::Fill => {
-            let bg_color = if let Some(ref color) = bg.color {
-                let (r, g, b) = (
-                    u8::from_str_radix(&color[1..3], 16).unwrap(),
-                    u8::from_str_radix(&color[3..5], 16).unwrap(),
-                    u8::from_str_radix(&color[5..7], 16).unwrap(),
-                );
+            let bg_color = bg.color.to_owned().unwrap_or("#000000".to_owned());
+            let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
 
-                Rgba::from_channels(r, g, b, 255)
-            } else {
-                Rgba::from_channels(0, 0, 0, 255)
-            };
-            let mut bg_image = ImageBuffer::from_pixel(bg.w, bg.h, bg_color);
             image = image.resize(bg.w, bg.h, FilterType::Lanczos3);
             let offset = (bg.w - image.width()) / 2;
             bg_image.copy_from(&image, offset, 0);
-            image = DynamicImage::ImageRgba8(bg_image);
+            image = bg_image;
+        },
+        BackgroundMode::Full => {
+            let bg_color = bg.color.to_owned().unwrap_or("#000000".to_owned());
+            let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
+
+            bg_image.copy_from(&image, 0, 0);
         },
         // BackgroundMode::Tile => {},
     }
@@ -121,21 +145,18 @@ fn main() {
              .short("d")
              .long("display")
              .takes_value(true))
+        .arg(Arg::with_name("mode")
+             .help("Sets the image mode")
+             .short("m")
+             .long("mode")
+             .takes_value(true)
+             .possible_values(&["center", "fill", "full", "stretch"]))
         .arg(Arg::with_name("vflip")
              .help("Flip the image vertically")
              .long("vflip"))
         .arg(Arg::with_name("hflip")
              .help("Flip the image horizontally")
              .long("hflip"))
-        .arg(Arg::with_name("stretch")
-             .help("Stretch image to fit to screen (default)")
-             .short("s")
-             .long("stretch"))
-        .arg(Arg::with_name("fill")
-             .help("Fill image to fit to screen without distorting")
-             .short("f")
-             .long("fill")
-             .conflicts_with("stretch"))
         .arg(Arg::with_name("color")
              .help("Set a solid color as the background")
              .short("c")
@@ -156,12 +177,20 @@ fn main() {
 
     let path = matches.value_of_os("image").map(|p| PathBuf::from(p));
 
-    let mode = if matches.is_present("stretch") {
-            BackgroundMode::Stretch
-    } else if matches.is_present("fill") {
+    let mode = if let Some(mode) = matches.value_of("mode") {
+        if mode == "center" {
+            BackgroundMode::Center
+        } else if mode == "fill" {
             BackgroundMode::Fill
-    } else {
+        } else if mode == "full" {
+            BackgroundMode::Full
+        } else if mode == "stretch" {
             BackgroundMode::Stretch
+        } else {
+            unreachable!()
+        }
+    } else {
+        BackgroundMode::Fill
     };
 
     let color = matches.value_of("color").map(|c| c.to_string());
