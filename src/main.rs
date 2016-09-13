@@ -8,16 +8,17 @@ mod xorg;
 
 use clap::{App, Arg};
 use image::*;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, stderr, stdin, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::u8;
 use xorg::*;
 
 // #[derive(Clone, Copy)]
-struct BackgroundOptions {
-    path: Option<PathBuf>,
-    color: Option<String>,
+struct BackgroundOptions<'a> {
+    path: Option<&'a Path>,
+    color: Option<&'a str>,
     w: u32,
     h: u32,
     mode: BackgroundMode,
@@ -47,7 +48,7 @@ enum BackgroundMode {
              // Repeat left-to-right if it is too small.
 }
 
-fn get_image_data(bg: &BackgroundOptions) -> Result<image::DynamicImage, ImageError> {
+fn get_image_data(bg: BackgroundOptions) -> Result<image::DynamicImage, ImageError> {
     let mut image =
         match bg.path {
             Some(ref path) => {
@@ -77,21 +78,19 @@ fn get_image_data(bg: &BackgroundOptions) -> Result<image::DynamicImage, ImageEr
         BackgroundMode::Center => {
             let img_w = image.width();
             let img_h = image.height();
-            let bg_w = bg.w;
-            let bg_h = bg.h;
 
-            let bg_color = bg.color.to_owned().unwrap_or("#000000".to_owned());
+            let bg_color = bg.color.unwrap_or("#000000");
             let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
 
-            let left: i32 = (bg_w as i32 - img_w as i32) / 2;
-            let top: i32 = (bg_h as i32 - img_h as i32) / 2;
+            let left: i32 = (bg.w as i32 - img_w as i32) / 2;
+            let top: i32 = (bg.h as i32 - img_h as i32) / 2;
 
             let mut image_copy = image;
             let sub_image = image_copy.sub_image(
                 if left < 0 { left.abs() as u32 } else { 0 },
                 if top < 0 { top.abs() as u32 } else { 0 },
-                if left < 0 { bg_w } else { img_w },
-                if top < 0 { bg_h } else { img_h },
+                if left < 0 { bg.w } else { img_w },
+                if top < 0 { bg.h } else { img_h },
             );
 
             bg_image.copy_from(&sub_image,
@@ -103,7 +102,7 @@ fn get_image_data(bg: &BackgroundOptions) -> Result<image::DynamicImage, ImageEr
             image = image.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
         },
         BackgroundMode::Fill => {
-            let bg_color = bg.color.to_owned().unwrap_or("#000000".to_owned());
+            let bg_color = bg.color.unwrap_or("#000000");
             let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
 
             image = image.resize(bg.w, bg.h, FilterType::Lanczos3);
@@ -112,7 +111,7 @@ fn get_image_data(bg: &BackgroundOptions) -> Result<image::DynamicImage, ImageEr
             image = bg_image;
         },
         BackgroundMode::Full => {
-            let bg_color = bg.color.to_owned().unwrap_or("#000000".to_owned());
+            let bg_color = bg.color.unwrap_or("#000000");
             let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
 
             bg_image.copy_from(&image, 0, 0);
@@ -190,7 +189,7 @@ fn main() {
     let w = screen.width_in_pixels();
     let h = screen.height_in_pixels();
 
-    let path = matches.value_of_os("image").map(|p| PathBuf::from(p));
+    let path = matches.value_of_os("image").map(OsStr::as_ref);
 
     let mode = if let Some(mode) = matches.value_of("mode") {
         if mode == "center" {
@@ -208,7 +207,7 @@ fn main() {
         BackgroundMode::Fill
     };
 
-    let color = matches.value_of("color").map(|c| c.to_string());
+    let color = matches.value_of("color");
 
     let bg_options = BackgroundOptions {
         path: path,
@@ -221,7 +220,7 @@ fn main() {
         // save_path: None,
     };
 
-    match get_image_data(&bg_options) {
+    match get_image_data(bg_options) {
         Ok(image) => set_background(&conn, &screen, &image),
         Err(e) => { let _ = writeln!(stderr(), "Error: {}", e); },
     }
