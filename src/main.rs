@@ -9,7 +9,7 @@ mod xorg;
 use clap::{App, Arg};
 use image::*;
 use std::fs::File;
-use std::io::{Read, stdin};
+use std::io::{Read, stderr, stdin, Write};
 use std::path::PathBuf;
 use std::u8;
 use xorg::*;
@@ -221,7 +221,8 @@ fn main() {
         // save_path: None,
     };
 
-    if let Ok(image) = get_image_data(&bg_options) {
-        set_background(&conn, &screen, &image);
+    match get_image_data(&bg_options) {
+        Ok(image) => set_background(&conn, &screen, &image),
+        Err(e) => { let _ = writeln!(stderr(), "Error: {}", e); },
     }
 }
