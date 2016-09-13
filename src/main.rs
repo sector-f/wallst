@@ -8,9 +8,10 @@ mod xorg;
 
 use clap::{App, Arg};
 use image::*;
-use std::u8;
+use std::fs::File;
 use std::io::{Read, stdin};
 use std::path::PathBuf;
+use std::u8;
 use xorg::*;
 
 // #[derive(Clone, Copy)]
@@ -47,17 +48,30 @@ enum BackgroundMode {
 }
 
 fn get_image_data(bg: &BackgroundOptions) -> Result<image::DynamicImage, ImageError> {
-    let mut image = if bg.path == Some(PathBuf::from("-")) {
-        let mut buffer = Vec::new();
-        let _ = stdin().read_to_end(&mut buffer);
-        try!(load_from_memory(&buffer))
-    } else if let Some(ref path) = bg.path {
-        try!(open(path))
-    } else if let Some(ref color) = bg.color {
-        get_solid_image(&color, bg.w, bg.h)
-    } else {
-        unreachable!()
-    };
+    let mut image =
+        match bg.path {
+            Some(ref path) => {
+                let mut buffer = Vec::new();
+                if path == &PathBuf::from("-") {
+                    let _ = stdin().read_to_end(&mut buffer);
+                    try!(load_from_memory(&buffer))
+                } else {
+                    let mut fin = match File::open(path) {
+                        Ok(f) => f,
+                        Err(e) => return Err(ImageError::IoError(e))
+                    };
+                    let _ = fin.read_to_end(&mut buffer);
+                    try!(load_from_memory(&buffer))
+                }
+            },
+            None => {
+                if let Some(ref color) = bg.color {
+                    get_solid_image(&color, bg.w, bg.h)
+                } else {
+                    unreachable!()
+                }
+            },
+        };
 
     match bg.mode {
         BackgroundMode::Center => {
