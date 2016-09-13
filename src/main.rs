@@ -102,6 +102,7 @@ fn get_image_data(bg: &BackgroundOptions) -> Result<image::DynamicImage, ImageEr
             let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
 
             bg_image.copy_from(&image, 0, 0);
+            image = bg_image;
         },
         // BackgroundMode::Tile => {},
     }
