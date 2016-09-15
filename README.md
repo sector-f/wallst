@@ -22,6 +22,8 @@ The following **MODE**s are available:
 
 * full - The image is placed in the top-left of the screen.
 
+* tile - The image is tiled if it is smaller than the screen.
+
 With all modes, excluding **stretch**, aspect ratio is preserved,
 and the image is surrounded by the background color if necessary.
 

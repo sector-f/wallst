@@ -11,7 +11,7 @@ use image::*;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, stderr, stdin, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::u8;
 use xorg::*;
 
@@ -44,7 +44,7 @@ enum BackgroundMode {
     Full,    // Place image in top-left of screen with no
              // modifications.
 
-    // Tile,    // Put image in top-left of screen.
+    Tile,    // Put image in top-left of screen.
              // Repeat left-to-right if it is too small.
 }
 
@@ -53,7 +53,7 @@ fn get_image_data(bg: BackgroundOptions) -> Result<image::DynamicImage, ImageErr
         match bg.path {
             Some(ref path) => {
                 let mut buffer = Vec::new();
-                if path == &PathBuf::from("-") {
+                if path.as_os_str() == "-" {
                     let _ = stdin().read_to_end(&mut buffer);
                     try!(load_from_memory(&buffer))
                 } else {
@@ -117,7 +117,24 @@ fn get_image_data(bg: BackgroundOptions) -> Result<image::DynamicImage, ImageErr
             bg_image.copy_from(&image, 0, 0);
             image = bg_image;
         },
-        // BackgroundMode::Tile => {},
+        BackgroundMode::Tile => {
+            // To-Do: Use a SubImage rather than increasing the bg size
+            let mut bg_image = get_solid_image("#000000",
+                                               bg.w + (image.width() % bg.w),
+                                               bg.h + (image.height() % bg.h));
+
+            let mut vert_overlap = 0;
+            while vert_overlap < bg.h {
+                let mut horiz_overlap = 0;
+                while horiz_overlap < bg.w {
+                    bg_image.copy_from(&image, horiz_overlap, vert_overlap);
+                    horiz_overlap += image.width();
+                }
+                vert_overlap += image.height();
+            }
+
+            image = bg_image.crop(0, 0, bg.w, bg.h);
+        },
     }
 
     if bg.vflip {
@@ -164,7 +181,7 @@ fn main() {
              .short("m")
              .long("mode")
              .takes_value(true)
-             .possible_values(&["center", "fill", "full", "stretch"]))
+             .possible_values(&["center", "fill", "full", "stretch", "tile"]))
         .arg(Arg::with_name("vflip")
              .help("Flip the image vertically")
              .long("vflip"))
@@ -200,6 +217,8 @@ fn main() {
             BackgroundMode::Full
         } else if mode == "stretch" {
             BackgroundMode::Stretch
+        } else if mode == "tile" {
+            BackgroundMode::Tile
         } else {
             unreachable!()
         }
