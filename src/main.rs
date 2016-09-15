@@ -24,7 +24,7 @@ struct BackgroundOptions<'a> {
     mode: BackgroundMode,
     vflip: bool,
     hflip: bool,
-    // save_path: Option<PathBuf>,
+    save_path: Option<&'a Path>,
 }
 
 // #[derive(Clone, Copy)]
@@ -145,6 +145,19 @@ fn get_image_data(bg: BackgroundOptions) -> Result<image::DynamicImage, ImageErr
         image = image.fliph();
     }
 
+    if let Some(save_path) = bg.save_path {
+        match File::create(&save_path) {
+            Ok(mut file) => {
+                if let Err(e) = image.save(&mut file, ImageFormat::PNG) {
+                    let _ = writeln!(stderr(), "Error saving image: {}", e);
+                }
+            },
+            Err(e) => {
+                let _ = writeln!(stderr(), "Failed to save image: {}", e);
+            },
+        }
+    }
+
     Ok(image)
 }
 
@@ -188,6 +201,11 @@ fn main() {
         .arg(Arg::with_name("hflip")
              .help("Flip the image horizontally")
              .long("hflip"))
+        .arg(Arg::with_name("output")
+             .help("The path to save the resulting (PNG) image as")
+             .short("o")
+             .long("output")
+             .takes_value(true))
         .arg(Arg::with_name("color")
              .help("Set a solid color as the background")
              .short("c")
@@ -236,7 +254,7 @@ fn main() {
         mode : mode,
         vflip: matches.is_present("vflip"),
         hflip: matches.is_present("hflip"),
-        // save_path: None,
+        save_path: matches.value_of_os("output").map(Path::new),
     };
 
     match get_image_data(bg_options) {

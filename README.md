@@ -3,7 +3,7 @@ A **WALL**paper **S**e**T**ter written in Rust
 
 ## SYNOPSIS
 
-**wallst** [**--hflip**] [**--vflip**] [**--color** *COLOR*] [**--mode** *MODE*] *IMAGE*
+**wallst** [**--hflip**] [**--vflip**] [**--color** *COLOR*] [**--output** *FILENAME*] [**--mode** *MODE*] *IMAGE*
 
 ## USAGE
 
@@ -26,6 +26,8 @@ The following **MODE**s are available:
 
 With all modes, excluding **stretch**, aspect ratio is preserved,
 and the image is surrounded by the background color if necessary.
+
+`--output` is used to save the image (with any modifications) as a PNG.
 
 `--hflip` and `--vflip`, unsurprisingly, flip the image
 horizontally and vertically, respectively.
