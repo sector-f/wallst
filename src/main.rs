@@ -18,6 +18,7 @@ use xorg::*;
 struct BackgroundOptions<'a> {
     path: Option<&'a Path>,
     color: Option<&'a str>,
+    alpha: Option<f32>,
     w: u32,
     h: u32,
     mode: BackgroundMode,
@@ -72,6 +73,19 @@ fn get_image_data(bg: BackgroundOptions) -> Result<image::DynamicImage, ImageErr
                 }
             },
         };
+
+    image = DynamicImage::ImageRgba8(image.to_rgba());
+    if let Some(alpha) = bg.alpha {
+        for pixel in image.as_mut_rgba8().unwrap().pixels_mut() {
+            pixel.apply_with_alpha(
+                (|i| i),
+                (|g| {
+                    let foo = (g as f32 * alpha) as u8;
+                    // println!("{}", foo);
+                    foo
+                }));
+        }
+    }
 
     match bg.mode {
         BackgroundMode::Center => {
@@ -190,8 +204,15 @@ fn get_solid_image(color_str: &str, w: u32, h:u32) -> DynamicImage {
         u8::from_str_radix(&color_str[5..7], 16).unwrap(),
     );
 
-    let color = Rgb::from_channels(r, g, b, 255);
-    DynamicImage::ImageRgb8(ImageBuffer::from_pixel(w, h, color))
+    let color = Rgba::from_channels(r, g, b, 255);
+    DynamicImage::ImageRgba8(ImageBuffer::from_pixel(w, h, color))
+}
+
+fn is_alpha(alpha: String) -> Result<(), String> {
+    match alpha.parse::<f32>() {
+        Ok(_) => Ok(()),
+        Err(_) => Err(String::from("Alpha must be a float from 0-1")),
+    }
 }
 
 fn main() {
@@ -215,6 +236,12 @@ fn main() {
         .arg(Arg::with_name("hflip")
              .help("Flip the image horizontally")
              .long("hflip"))
+        .arg(Arg::with_name("alpha")
+             .help("The images alpha channel (0 - 255)")
+             .short("a")
+             .long("alpha")
+             .takes_value(true)
+             .validator(is_alpha))
         .arg(Arg::with_name("output")
              .help("The path to save the resulting (PNG) image as")
              .short("o")
@@ -255,14 +282,16 @@ fn main() {
             unreachable!()
         }
     } else {
-        BackgroundMode::Fill
+        BackgroundMode::Full
     };
 
     let color = matches.value_of("color");
+    let alpha = matches.value_of("alpha").map(|a| a.parse::<f32>().unwrap());
 
     let bg_options = BackgroundOptions {
         path: path,
         color: color,
+        alpha: alpha,
         w: w as u32,
         h: h as u32,
         mode : mode,
