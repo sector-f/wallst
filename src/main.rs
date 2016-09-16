@@ -1,6 +1,5 @@
 extern crate clap;
 extern crate image;
-extern crate regex;
 extern crate xcb;
 extern crate xcb_util as xcbu;
 
@@ -162,11 +161,26 @@ fn get_image_data(bg: BackgroundOptions) -> Result<image::DynamicImage, ImageErr
 }
 
 fn is_valid_color(color: String) -> Result<(), String> {
-    let regex = regex::Regex::new(r"^#[:xdigit:]{6}$").unwrap();
-    match regex.is_match(&color) {
-        true => Ok(()),
-        false => Err(("Colors must be in the form of #rrggbb".to_owned())),
+    fn err() -> Result<(),String> {
+        Err(String::from("Colors must be in the form #RRGGBB"))
     }
+
+    if color.len() != 7 /* || color.len() != 9 */ {
+        return err();
+    }
+
+    let mut chars = color.chars();
+    if chars.next() != Some('#') {
+        return err();
+    }
+
+    for c in chars {
+        if ! c.is_digit(16) {
+            return err();
+        }
+    }
+
+    Ok(())
 }
 
 fn get_solid_image(color_str: &str, w: u32, h:u32) -> DynamicImage {

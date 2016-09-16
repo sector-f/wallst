@@ -6,7 +6,6 @@ authors = ["Adam <adamsimeth@gmail.com>"]
 [dependencies]
 clap = "2.9.*"
 image = "0.10.*"
-regex = "0.1"
 xcb = "0.7.*"
 
 [dependencies.xcb-util]
