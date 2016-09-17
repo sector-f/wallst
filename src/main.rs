@@ -18,7 +18,7 @@ use xorg::*;
 struct BackgroundOptions<'a> {
     path: Option<&'a Path>,
     color: Option<&'a str>,
-    alpha: Option<f32>,
+    alpha: Option<u8>,
     w: u32,
     h: u32,
     mode: BackgroundMode,
@@ -48,7 +48,104 @@ enum BackgroundMode {
              // Repeat left-to-right if it is too small.
 }
 
-fn get_image_data(bg: BackgroundOptions) -> Result<image::DynamicImage, ImageError> {
+fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
+    let bg_color = bg.color.unwrap_or("#000000");
+    let mut image = get_solid_image(bg_color, bg.w, bg.h);
+
+    if let Some(ref path) = bg.path {
+        let mut buffer = Vec::new();
+        let mut foreground =
+            if path.as_os_str() == "-" {
+                let _ = stdin().read_to_end(&mut buffer);
+                try!(load_from_memory(&buffer))
+            } else {
+                let mut fin = match File::open(path) {
+                    Ok(f) => f,
+                    Err(e) => return Err(ImageError::IoError(e))
+                };
+                let _ = fin.read_to_end(&mut buffer);
+                try!(load_from_memory(&buffer))
+            };
+        foreground = DynamicImage::ImageRgba8(foreground.to_rgba());
+        let mut buffer: RgbaImage = ImageBuffer::new(bg.w, bg.h);
+
+        match bg.mode {
+            BackgroundMode::Center => {
+                // let img_w = image.width();
+                // let img_h = image.height();
+
+                // let bg_color = bg.color.unwrap_or("#000000");
+                // let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
+
+                // let left: i32 = (bg.w as i32 - img_w as i32) / 2;
+                // let top: i32 = (bg.h as i32 - img_h as i32) / 2;
+
+                // let mut image_copy = image;
+                // let sub_image = image_copy.sub_image(
+                //     if left < 0 { left.abs() as u32 } else { 0 },
+                //     if top < 0 { top.abs() as u32 } else { 0 },
+                //     if left < 0 { bg.w } else { img_w },
+                //     if top < 0 { bg.h } else { img_h },
+                // );
+
+                // bg_image.copy_from(&sub_image,
+                //                    if left < 0 { 0 } else { left.abs() as u32 },
+                //                    if top < 0 { 0 } else { top.abs() as u32 });
+                // image = bg_image;
+            },
+            BackgroundMode::Stretch => {
+                foreground = foreground.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
+            },
+            BackgroundMode::Fill => {
+                // let bg_color = bg.color.unwrap_or("#000000");
+                // let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
+
+                // image = image.resize(bg.w, bg.h, FilterType::Lanczos3);
+                // let offset = (bg.w - image.width()) / 2;
+                // bg_image.copy_from(&image, offset, 0);
+                // image = bg_image;
+            },
+            BackgroundMode::Full => {
+                // let bg_color = bg.color.unwrap_or("#000000");
+                // let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
+
+                // bg_image.copy_from(&image, 0, 0);
+                // image = bg_image;
+            },
+            BackgroundMode::Tile => {
+                // // To-Do: Use a SubImage rather than increasing the bg size
+                // let mut bg_image = get_solid_image("#000000",
+                //                                    bg.w + (image.width() % bg.w),
+                //                                    bg.h + (image.height() % bg.h));
+
+                // let mut vert_overlap = 0;
+                // while vert_overlap < bg.h {
+                //     let mut horiz_overlap = 0;
+                //     while horiz_overlap < bg.w {
+                //         bg_image.copy_from(&image, horiz_overlap, vert_overlap);
+                //         horiz_overlap += image.width();
+                //     }
+                //     vert_overlap += image.height();
+                // }
+
+                // image = bg_image.crop(0, 0, bg.w, bg.h);
+            },
+        }
+
+        if let Some(alpha) = bg.alpha {
+            for pixel in foreground.as_mut_rgba8().unwrap().pixels_mut() {
+                pixel[3] = alpha;
+            }
+        }
+
+        // And now I need to blend them. I think.
+
+    }
+
+    Ok(image)
+}
+
+fn _get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
     let mut image =
         match bg.path {
             Some(ref path) => {
@@ -77,13 +174,7 @@ fn get_image_data(bg: BackgroundOptions) -> Result<image::DynamicImage, ImageErr
     image = DynamicImage::ImageRgba8(image.to_rgba());
     if let Some(alpha) = bg.alpha {
         for pixel in image.as_mut_rgba8().unwrap().pixels_mut() {
-            pixel.apply_with_alpha(
-                (|i| i),
-                (|g| {
-                    let foo = (g as f32 * alpha) as u8;
-                    // println!("{}", foo);
-                    foo
-                }));
+            pixel[3] = (alpha as f32 * 255f32) as u8;
         }
     }
 
@@ -209,9 +300,9 @@ fn get_solid_image(color_str: &str, w: u32, h:u32) -> DynamicImage {
 }
 
 fn is_alpha(alpha: String) -> Result<(), String> {
-    match alpha.parse::<f32>() {
+    match alpha.parse::<u8>() {
         Ok(_) => Ok(()),
-        Err(_) => Err(String::from("Alpha must be a float from 0-1")),
+        Err(_) => Err(String::from("Alpha must be an integer from 0-255")),
     }
 }
 
@@ -286,7 +377,7 @@ fn main() {
     };
 
     let color = matches.value_of("color");
-    let alpha = matches.value_of("alpha").map(|a| a.parse::<f32>().unwrap());
+    let alpha = matches.value_of("alpha").map(|a| a.parse::<u8>().unwrap());
 
     let bg_options = BackgroundOptions {
         path: path,
