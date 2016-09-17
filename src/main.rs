@@ -67,7 +67,10 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
                 try!(load_from_memory(&buffer))
             };
         foreground = DynamicImage::ImageRgba8(foreground.to_rgba());
-        let mut buffer: RgbaImage = ImageBuffer::new(bg.w, bg.h);
+
+        let mut buffer = DynamicImage::new_rgba8(bg.w, bg.h);
+        // let mut x_offset = 0;
+        // let mut y_offset = 0;
 
         match bg.mode {
             BackgroundMode::Center => {
@@ -132,10 +135,18 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
             },
         }
 
+        buffer.copy_from(&foreground, 0, 0);
+
         if let Some(alpha) = bg.alpha {
-            for pixel in foreground.as_mut_rgba8().unwrap().pixels_mut() {
+            for pixel in buffer.as_mut_rgba8().unwrap().pixels_mut() {
                 pixel[3] = alpha;
             }
+        }
+
+        let zipped = image.as_mut_rgba8().unwrap().pixels_mut().zip(buffer.as_rgba8().unwrap().pixels());
+
+        for (bg_pix, fg_pix) in zipped {
+            bg_pix.blend(fg_pix);
         }
 
         // And now I need to blend them. I think.
