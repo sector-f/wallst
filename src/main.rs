@@ -68,7 +68,7 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
             };
         foreground = DynamicImage::ImageRgba8(foreground.to_rgba());
 
-        let mut img_buffer = DynamicImage::new_rgba8(bg.w, bg.h);
+        let mut placeholder = image.clone();
         let mut x_offset = 0;
         let mut y_offset = 0;
 
@@ -80,7 +80,6 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
                 let left: i32 = (bg.w as i32 - img_w as i32) / 2;
                 let top: i32 = (bg.h as i32 - img_h as i32) / 2;
 
-                // let mut image_copy = image;
                 foreground = DynamicImage::ImageRgba8(
                     foreground.sub_image(
                         if left < 0 { left.abs() as u32 } else { 0 },
@@ -132,22 +131,43 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
             },
         }
 
-        img_buffer.copy_from(&foreground, x_offset, y_offset);
+        placeholder.copy_from(&foreground, x_offset, y_offset);
 
         if let Some(alpha) = bg.alpha {
-            for pixel in img_buffer.as_mut_rgba8().unwrap().pixels_mut() {
+            for pixel in placeholder.as_mut_rgba8().unwrap().pixels_mut() {
                 pixel[3] = alpha;
             }
         }
 
         let zipped = image.as_mut_rgba8().unwrap().pixels_mut().zip(
-            img_buffer.as_rgba8().unwrap().pixels()
+            placeholder.as_rgba8().unwrap().pixels()
         );
 
         for (bg_pix, fg_pix) in zipped {
             bg_pix.blend(fg_pix);
         }
 
+    }
+
+    if bg.vflip {
+        image = image.flipv();
+    }
+
+    if bg.hflip {
+        image = image.fliph();
+    }
+
+    if let Some(save_path) = bg.save_path {
+        match File::create(&save_path) {
+            Ok(mut file) => {
+                if let Err(e) = image.save(&mut file, ImageFormat::PNG) {
+                    let _ = writeln!(stderr(), "Error saving image: {}", e);
+                }
+            },
+            Err(e) => {
+                let _ = writeln!(stderr(), "Failed to save image: {}", e);
+            },
+        }
     }
 
     Ok(image)
