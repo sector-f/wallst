@@ -69,8 +69,6 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
         foreground = DynamicImage::ImageRgba8(foreground.to_rgba());
 
         let mut placeholder = image.clone();
-        let mut x_offset = 0;
-        let mut y_offset = 0;
 
         match bg.mode {
             BackgroundMode::Center => {
@@ -89,11 +87,12 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
                     ).to_image()
                 );
 
-                x_offset = if left < 0 { 0 } else { left.abs() as u32 };
-                y_offset = if top < 0 { 0 } else { top.abs() as u32 };
+                let x_offset = if left < 0 { 0 } else { left.abs() as u32 };
+                let y_offset = if top < 0 { 0 } else { top.abs() as u32 };
+                placeholder.copy_from(&foreground, x_offset, y_offset);
             },
             BackgroundMode::Stretch => {
-                foreground = foreground.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
+                placeholder = foreground.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
             },
             BackgroundMode::Fill => {
                 // let bg_color = bg.color.unwrap_or("#000000");
@@ -112,26 +111,28 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
                 // image = bg_image;
             },
             BackgroundMode::Tile => {
-                // // To-Do: Use a SubImage rather than increasing the bg size
-                // let mut bg_image = get_solid_image("#000000",
-                //                                    bg.w + (image.width() % bg.w),
-                //                                    bg.h + (image.height() % bg.h));
+                // To-Do: Use a SubImage rather than increasing the bg size
+                let img_w = foreground.width();
+                let img_h = foreground.height();
+                placeholder = get_solid_image(
+                    bg_color,
+                    if img_w < bg.w { bg.w + (img_w % bg.w) } else { img_w },
+                    if img_h < bg.h { bg.h + (img_h % bg.h) } else { img_h },
+                );
 
-                // let mut vert_overlap = 0;
-                // while vert_overlap < bg.h {
-                //     let mut horiz_overlap = 0;
-                //     while horiz_overlap < bg.w {
-                //         bg_image.copy_from(&image, horiz_overlap, vert_overlap);
-                //         horiz_overlap += image.width();
-                //     }
-                //     vert_overlap += image.height();
-                // }
+                let mut vert_overlap = 0;
+                while vert_overlap < bg.h {
+                    let mut horiz_overlap = 0;
+                    while horiz_overlap < bg.w {
+                        placeholder.copy_from(&foreground, horiz_overlap, vert_overlap);
+                        horiz_overlap += foreground.width();
+                    }
+                    vert_overlap += foreground.height();
+                }
 
-                // image = bg_image.crop(0, 0, bg.w, bg.h);
+                placeholder = placeholder.crop(0, 0, bg.w, bg.h);
             },
         }
-
-        placeholder.copy_from(&foreground, x_offset, y_offset);
 
         if let Some(alpha) = bg.alpha {
             for pixel in placeholder.as_mut_rgba8().unwrap().pixels_mut() {
