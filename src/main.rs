@@ -68,33 +68,30 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
             };
         foreground = DynamicImage::ImageRgba8(foreground.to_rgba());
 
-        let mut buffer = DynamicImage::new_rgba8(bg.w, bg.h);
-        // let mut x_offset = 0;
-        // let mut y_offset = 0;
+        let mut img_buffer = DynamicImage::new_rgba8(bg.w, bg.h);
+        let mut x_offset = 0;
+        let mut y_offset = 0;
 
         match bg.mode {
             BackgroundMode::Center => {
-                // let img_w = image.width();
-                // let img_h = image.height();
+                let img_w = foreground.width();
+                let img_h = foreground.height();
 
-                // let bg_color = bg.color.unwrap_or("#000000");
-                // let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
-
-                // let left: i32 = (bg.w as i32 - img_w as i32) / 2;
-                // let top: i32 = (bg.h as i32 - img_h as i32) / 2;
+                let left: i32 = (bg.w as i32 - img_w as i32) / 2;
+                let top: i32 = (bg.h as i32 - img_h as i32) / 2;
 
                 // let mut image_copy = image;
-                // let sub_image = image_copy.sub_image(
-                //     if left < 0 { left.abs() as u32 } else { 0 },
-                //     if top < 0 { top.abs() as u32 } else { 0 },
-                //     if left < 0 { bg.w } else { img_w },
-                //     if top < 0 { bg.h } else { img_h },
-                // );
+                foreground = DynamicImage::ImageRgba8(
+                    foreground.sub_image(
+                        if left < 0 { left.abs() as u32 } else { 0 },
+                        if top < 0 { top.abs() as u32 } else { 0 },
+                        if left < 0 { bg.w } else { img_w },
+                        if top < 0 { bg.h } else { img_h },
+                    ).to_image()
+                );
 
-                // bg_image.copy_from(&sub_image,
-                //                    if left < 0 { 0 } else { left.abs() as u32 },
-                //                    if top < 0 { 0 } else { top.abs() as u32 });
-                // image = bg_image;
+                x_offset = if left < 0 { 0 } else { left.abs() as u32 };
+                y_offset = if top < 0 { 0 } else { top.abs() as u32 };
             },
             BackgroundMode::Stretch => {
                 foreground = foreground.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
@@ -135,21 +132,21 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
             },
         }
 
-        buffer.copy_from(&foreground, 0, 0);
+        img_buffer.copy_from(&foreground, x_offset, y_offset);
 
         if let Some(alpha) = bg.alpha {
-            for pixel in buffer.as_mut_rgba8().unwrap().pixels_mut() {
+            for pixel in img_buffer.as_mut_rgba8().unwrap().pixels_mut() {
                 pixel[3] = alpha;
             }
         }
 
-        let zipped = image.as_mut_rgba8().unwrap().pixels_mut().zip(buffer.as_rgba8().unwrap().pixels());
+        let zipped = image.as_mut_rgba8().unwrap().pixels_mut().zip(
+            img_buffer.as_rgba8().unwrap().pixels()
+        );
 
         for (bg_pix, fg_pix) in zipped {
             bg_pix.blend(fg_pix);
         }
-
-        // And now I need to blend them. I think.
 
     }
 
