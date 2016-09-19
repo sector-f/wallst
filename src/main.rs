@@ -104,20 +104,26 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
                 // image = bg_image;
             },
             BackgroundMode::Full => {
-                // let bg_color = bg.color.unwrap_or("#000000");
-                // let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
-
-                // bg_image.copy_from(&image, 0, 0);
-                // image = bg_image;
+                foreground = foreground.crop(0, 0, bg.w, bg.h);
+                placeholder.copy_from(&foreground, 0, 0);
             },
             BackgroundMode::Tile => {
-                // To-Do: Use a SubImage rather than increasing the bg size
+                // To-Do: Use a SubImage rather than increasing the placeholder size?
                 let img_w = foreground.width();
                 let img_h = foreground.height();
+
+                // I love it when I come across crazy things in source code that
+                // make no sense and have no explanation! Just kidding.
+                // Here's what this does. For both width and height:
+                // If img > bg then the placeholder becomes the img size.
+                // If bg > img then the placeholder becomes the lowest multiple of the
+                // img size that's greater than the bg size.
+                // This is so that copying to the placeholder image actually succeeds.
+
                 placeholder = get_solid_image(
                     bg_color,
-                    if img_w < bg.w { bg.w + (img_w % bg.w) } else { img_w },
-                    if img_h < bg.h { bg.h + (img_h % bg.h) } else { img_h },
+                    (img_w * ((bg.w + img_w - 1) / img_w)),
+                    (img_h * ((bg.h + img_h - 1) / img_h)),
                 );
 
                 let mut vert_overlap = 0;
