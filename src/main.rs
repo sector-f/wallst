@@ -14,7 +14,6 @@ use std::path::Path;
 use std::u8;
 use xorg::*;
 
-// #[derive(Clone, Copy)]
 struct BackgroundOptions<'a> {
     path: Option<&'a Path>,
     color: Option<&'a str>,
@@ -27,7 +26,6 @@ struct BackgroundOptions<'a> {
     save_path: Option<&'a Path>,
 }
 
-// #[derive(Clone, Copy)]
 enum BackgroundMode {
     Center,  // Center on background. Preserve aspect ratio.
              // If it's too small, surround with background color.
@@ -95,13 +93,9 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
                 placeholder = foreground.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
             },
             BackgroundMode::Fill => {
-                // let bg_color = bg.color.unwrap_or("#000000");
-                // let mut bg_image = get_solid_image(&bg_color, bg.w, bg.h);
-
-                // image = image.resize(bg.w, bg.h, FilterType::Lanczos3);
-                // let offset = (bg.w - image.width()) / 2;
-                // bg_image.copy_from(&image, offset, 0);
-                // image = bg_image;
+                foreground = foreground.resize(bg.w, bg.h, FilterType::Lanczos3);
+                let offset = (bg.w - foreground.width()) / 2;
+                placeholder.copy_from(&foreground, offset, 0);
             },
             BackgroundMode::Full => {
                 foreground = foreground.crop(0, 0, bg.w, bg.h);
