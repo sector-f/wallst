@@ -136,7 +136,7 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
 
         if let Some(alpha) = bg.alpha {
             for pixel in placeholder.as_mut_rgba8().unwrap().pixels_mut() {
-                pixel[3] = alpha;
+                pixel[3] = (pixel[3] as f32 * (alpha as f32 / 255f32)) as u8;
             }
         }
 
