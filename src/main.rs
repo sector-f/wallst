@@ -1,12 +1,28 @@
 extern crate clap;
 extern crate image;
+extern crate palette;
 extern crate xcb;
 extern crate xcb_util as xcbu;
 
 mod xorg;
 
-use clap::{App, Arg};
-use image::*;
+use clap::{App, Arg, OsValues};
+// use image::*;
+use image::{
+    DynamicImage,
+    FilterType,
+    GenericImage,
+    ImageBuffer,
+    ImageError,
+    ImageFormat,
+    load_from_memory,
+    Pixel,
+    Rgb as image_rgb,
+    Rgba as image_rgba,
+};
+use palette::Gradient;
+use palette::Rgb as palette_rgb;
+use palette::pixel::Srgb;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, stderr, stdin, Write};
@@ -16,7 +32,7 @@ use xorg::*;
 
 struct BackgroundOptions<'a> {
     path: Option<&'a Path>,
-    color: Option<&'a str>,
+    colors: Option<OsValues<'a>>,
     alpha: Option<u8>,
     w: u32,
     h: u32,
@@ -47,8 +63,8 @@ enum BackgroundMode {
 }
 
 fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
-    let bg_color = bg.color.unwrap_or("#000000");
-    let mut image = get_solid_image(bg_color, bg.w, bg.h);
+    let colors = bg.colors.clone();
+    let mut image = get_background(colors, bg.w, bg.h);
 
     if let Some(ref path) = bg.path {
         let mut buffer = Vec::new();
@@ -114,8 +130,8 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
                 // img size that's greater than the bg size.
                 // This is so that copying to the placeholder image actually succeeds.
 
-                placeholder = get_solid_image(
-                    bg_color,
+                placeholder = get_background(
+                    bg.colors,
                     (img_w * ((bg.w + img_w - 1) / img_w)),
                     (img_h * ((bg.h + img_h - 1) / img_h)),
                 );
@@ -197,6 +213,22 @@ fn is_valid_color(color: String) -> Result<(), String> {
     Ok(())
 }
 
+fn get_background<'a>(colors: Option<OsValues<'a>>, w: u32, h: u32) -> DynamicImage {
+    let colors_vec: Vec<_> =
+        colors.iter().flat_map(|c| c.clone().into_iter()).collect::<Vec<_>>();
+    match colors_vec.len() {
+        0 => {
+            get_solid_image("#000000", w, h)
+        },
+        1 => {
+            get_solid_image(colors_vec[0].to_str().unwrap(), w, h)
+        }
+        _ => {
+            get_gradient(&colors_vec, w, h)
+        },
+    }
+}
+
 fn get_solid_image(color_str: &str, w: u32, h:u32) -> DynamicImage {
     let (r, g, b) = (
         u8::from_str_radix(&color_str[1..3], 16).unwrap(),
@@ -204,8 +236,45 @@ fn get_solid_image(color_str: &str, w: u32, h:u32) -> DynamicImage {
         u8::from_str_radix(&color_str[5..7], 16).unwrap(),
     );
 
-    let color = Rgba::from_channels(r, g, b, 255);
+    let color = image_rgba::from_channels(r, g, b, 255);
     DynamicImage::ImageRgba8(ImageBuffer::from_pixel(w, h, color))
+}
+
+fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
+    let mut image = DynamicImage::new_rgb8(w, h);
+    let gradient = Gradient::new(
+        colors.iter().map(|c|
+            color_from_str(
+                c.to_str().unwrap()
+            )
+        )
+    );
+
+    for (x, color) in (0..w).zip(gradient.take(w as usize)) {
+        for y in 0..h {
+            image.as_mut_rgb8().unwrap().put_pixel(x, y, srgb(color));
+        }
+    }
+
+    image
+}
+
+fn srgb(value: palette_rgb<f32>) -> image_rgb<u8> {
+    let pixel = Srgb::from(value);
+
+    image_rgb { data: [
+        (pixel.red * 255.0) as u8,
+        (pixel.green * 255.0) as u8,
+        (pixel.blue * 255.0) as u8,
+    ] }
+}
+
+fn color_from_str(color_str: &str) -> palette_rgb<f32> {
+    palette_rgb::new(
+        u8::from_str_radix(&color_str[1..3], 16).unwrap() as f32,
+        u8::from_str_radix(&color_str[3..5], 16).unwrap() as f32,
+        u8::from_str_radix(&color_str[5..7], 16).unwrap() as f32,
+    )
 }
 
 fn is_alpha(alpha: String) -> Result<(), String> {
@@ -252,6 +321,8 @@ fn main() {
              .short("c")
              .long("color")
              .validator(is_valid_color)
+             .multiple(true)
+             .number_of_values(1)
              .takes_value(true))
         .arg(Arg::with_name("image")
              .help("The image to use as the background. Use - for stdin")
@@ -285,12 +356,11 @@ fn main() {
         BackgroundMode::Full
     };
 
-    let color = matches.value_of("color");
     let alpha = matches.value_of("alpha").map(|a| a.parse::<u8>().unwrap());
 
     let bg_options = BackgroundOptions {
         path: path,
-        color: color,
+        colors: matches.values_of_os("color"),
         alpha: alpha,
         w: w as u32,
         h: h as u32,
