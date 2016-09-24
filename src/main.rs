@@ -12,7 +12,6 @@ use image::{
     DynamicImage,
     FilterType,
     GenericImage,
-    ImageBuffer,
     ImageError,
     ImageFormat,
     load_from_memory,
@@ -216,23 +215,12 @@ fn get_background<'a>(colors: Option<OsValues<'a>>, w: u32, h: u32) -> DynamicIm
         colors.iter().flat_map(|c| c.clone().into_iter()).collect::<Vec<_>>();
     match colors_vec.len() {
         0 => {
-            get_solid_image("#000000", w, h)
+            get_gradient(&["#000000".as_ref()], w, h)
         },
         _ => {
             get_gradient(&colors_vec, w, h)
         },
     }
-}
-
-fn get_solid_image(color_str: &str, w: u32, h:u32) -> DynamicImage {
-    let (r, g, b) = (
-        u8::from_str_radix(&color_str[1..3], 16).unwrap(),
-        u8::from_str_radix(&color_str[3..5], 16).unwrap(),
-        u8::from_str_radix(&color_str[5..7], 16).unwrap(),
-    );
-
-    let color = image_rgba::from_channels(r, g, b, 255);
-    DynamicImage::ImageRgba8(ImageBuffer::from_pixel(w, h, color))
 }
 
 fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
