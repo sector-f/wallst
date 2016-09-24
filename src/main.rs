@@ -222,7 +222,7 @@ fn get_background<'a>(colors: Option<OsValues<'a>>, w: u32, h: u32) -> DynamicIm
         },
         1 => {
             get_solid_image(colors_vec[0].to_str().unwrap(), w, h)
-        }
+        },
         _ => {
             get_gradient(&colors_vec, w, h)
         },
@@ -241,7 +241,7 @@ fn get_solid_image(color_str: &str, w: u32, h:u32) -> DynamicImage {
 }
 
 fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
-    let mut image = DynamicImage::new_rgb8(w, h);
+    let mut image = DynamicImage::new_rgba8(w, h);
     let gradient = Gradient::new(
         colors.iter().map(|c|
             color_from_str(
@@ -252,20 +252,21 @@ fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
 
     for (x, color) in (0..w).zip(gradient.take(w as usize)) {
         for y in 0..h {
-            image.as_mut_rgb8().unwrap().put_pixel(x, y, srgb(color));
+            image.as_mut_rgba8().unwrap().put_pixel(x, y, srgb(color));
         }
     }
 
     image
 }
 
-fn srgb(value: palette_rgb<f32>) -> image_rgb<u8> {
+fn srgb(value: palette_rgb<f32>) -> image_rgba<u8> {
     let pixel = Srgb::from(value);
 
-    image_rgb { data: [
+    image_rgba { data: [
         (pixel.red * 255.0) as u8,
         (pixel.green * 255.0) as u8,
         (pixel.blue * 255.0) as u8,
+        255,
     ] }
 }
 
