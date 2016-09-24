@@ -17,12 +17,10 @@ use image::{
     ImageFormat,
     load_from_memory,
     Pixel,
-    Rgb as image_rgb,
     Rgba as image_rgba,
 };
 use palette::Gradient;
 use palette::Rgb as palette_rgb;
-use palette::pixel::Srgb;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, stderr, stdin, Write};
@@ -220,9 +218,6 @@ fn get_background<'a>(colors: Option<OsValues<'a>>, w: u32, h: u32) -> DynamicIm
         0 => {
             get_solid_image("#000000", w, h)
         },
-        1 => {
-            get_solid_image(colors_vec[0].to_str().unwrap(), w, h)
-        },
         _ => {
             get_gradient(&colors_vec, w, h)
         },
@@ -252,7 +247,8 @@ fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
 
     for (x, color) in (0..w).zip(gradient.take(w as usize)) {
         for y in 0..h {
-            image.as_mut_rgba8().unwrap().put_pixel(x, y, srgb(color));
+            let foo = srgb(color);
+            image.as_mut_rgba8().unwrap().put_pixel(x, y, foo);
         }
     }
 
@@ -260,12 +256,10 @@ fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
 }
 
 fn srgb(value: palette_rgb<f32>) -> image_rgba<u8> {
-    let pixel = Srgb::from(value);
-
     image_rgba { data: [
-        (pixel.red * 255.0) as u8,
-        (pixel.green * 255.0) as u8,
-        (pixel.blue * 255.0) as u8,
+        value.red as u8,
+        value.green as u8,
+        value.blue as u8,
         255,
     ] }
 }
