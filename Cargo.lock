@@ -5,7 +5,7 @@ dependencies = [
  "clap 2.9.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "palette 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "picto 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "picto 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "xcb 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "xcb-util 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -279,7 +279,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "picto"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",

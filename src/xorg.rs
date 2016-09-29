@@ -4,7 +4,8 @@ extern crate xcb;
 extern crate xcb_util as xcbu;
 
 // use image::*;
-use picto::color::Rgb;
+// use picto::color::Rgb;
+use picto::buffer::Rgba as Rgba_image;
 
 const ATOMS: &'static [&'static str] = &[
     "_XROOTPMAP_ID",
@@ -37,7 +38,7 @@ pub fn clean_root_atoms(conn: &xcb::Connection,
 
 pub fn set_background(conn: &xcb::Connection,
                       screen: &xcb::Screen,
-                      image: &picto::Buffer<u8, Rgb, Vec<u8>>) {
+                      image: Rgba_image) {
     let w = screen.width_in_pixels();
     let h = screen.height_in_pixels();
 

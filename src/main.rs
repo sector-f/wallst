@@ -6,8 +6,8 @@ extern crate xcb_util as xcbu;
 mod xorg;
 
 use clap::{App, Arg, OsValues};
-use picto::Buffer;
-use picto::color::{Alpha, Gradient, Rgb};
+use picto::buffer::{self, Buffer, Rgba as Rgba_image};
+use picto::color::{Alpha, Gradient, Rgb, Rgba};
 use picto::Orientation::{Horizontal, Vertical};
 use std::ffi::OsStr;
 use std::fs::File;
@@ -48,9 +48,7 @@ enum BackgroundMode {
              // Repeat left-to-right if it is too small.
 }
 
-type rgba_image = picto::Buffer<u8, Rgb, Vec<u8>>;
-
-fn get_image_data(bg: BackgroundOptions) -> Result<rgba_image, picto::Error> {
+fn get_image_data(bg: BackgroundOptions) -> Result<Rgba_image, picto::Error> {
     if let Some(_) = bg.path {
         unimplemented!();
     }
@@ -74,16 +72,16 @@ fn get_image_data(bg: BackgroundOptions) -> Result<rgba_image, picto::Error> {
     Ok(background)
 }
 
-fn color_from_str(color_str: &str) -> Rgb {
+fn color_from_str(color_str: &str) -> Rgba {
     let red = u8::from_str_radix(&color_str[1..3], 16).unwrap();
     let green = u8::from_str_radix(&color_str[3..5], 16).unwrap();
     let blue = u8::from_str_radix(&color_str[5..7], 16).unwrap();
-    Rgb::new_u8(red, green, blue) as Rgb<f32>
+    Rgba::new_u8(red, green, blue, 255)
 }
 
 fn get_background<'a>(colors: Option<OsValues<'a>>,
                   w: u32,
-                  h: u32) -> rgba_image {
+                  h: u32) -> Rgba_image {
     let colors_vec =
         colors.iter().flat_map(|c| c.clone().into_iter())
         .map(|c| color_from_str(&c.to_string_lossy()))
@@ -91,7 +89,7 @@ fn get_background<'a>(colors: Option<OsValues<'a>>,
 
     let bg_color = match colors_vec.len() {
         0 => {
-            let black: Rgb = Rgb::new_u8(0, 0, 0);
+            let black = Rgba::new_u8(0, 0, 0, 0);
             Gradient::new(vec![black])
         },
         _ => {
@@ -219,7 +217,7 @@ fn main() {
     };
 
     match get_image_data(bg_options) {
-        Ok(image) => set_background(&conn, &screen, &image),
+        Ok(image) => set_background(&conn, &screen, image),
         Err(e) => { let _ = writeln!(stderr(), "Error: {}", e); },
     }
 }
