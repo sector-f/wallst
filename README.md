@@ -10,7 +10,8 @@ A **WALL**paper **S**e**T**ter written in Rust
 **IMAGE** is necessary unless `--color` is used. If **IMAGE** is `-`,
 **wallst** will read from standard input rather than from a file.
 
-**COLOR** must be in the form `#RRGGBB`. If no color is specified, it defaults to `#000000`.
+**COLOR** must be in the form `#RRGGBB`. If no color is specified, it defaults to `#000000`. If more than one color is specified, a gradient is created with the specified
+colors going from left to right.
 
 The following **MODE**s are available:
 
