@@ -1,8 +1,10 @@
-extern crate image;
+// extern crate image;
+extern crate picto;
 extern crate xcb;
 extern crate xcb_util as xcbu;
 
-use image::*;
+// use image::*;
+use picto::color::Rgb;
 
 const ATOMS: &'static [&'static str] = &[
     "_XROOTPMAP_ID",
@@ -35,7 +37,7 @@ pub fn clean_root_atoms(conn: &xcb::Connection,
 
 pub fn set_background(conn: &xcb::Connection,
                       screen: &xcb::Screen,
-                      image: &DynamicImage) {
+                      image: &picto::Buffer<u8, Rgb, Vec<u8>>) {
     let w = screen.width_in_pixels();
     let h = screen.height_in_pixels();
 
@@ -43,9 +45,10 @@ pub fn set_background(conn: &xcb::Connection,
         .expect("Failed to create shm");
 
     for (x, y, pixel) in image.pixels() {
-        let r = pixel[0] as u32;
-        let g = pixel[1] as u32;
-        let b = pixel[2] as u32;
+        let pixel = pixel.get();
+        let r = (pixel.red * 255f32) as u32;
+        let g = (pixel.green * 255f32) as u32;
+        let b = (pixel.blue * 255f32) as u32;
         shm.put(x, y, ((r << 16) | (g << 8) | (b << 0)));
     }
 

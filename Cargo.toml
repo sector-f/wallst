@@ -8,6 +8,7 @@ clap = "2.9.*"
 image = "0.10.*"
 xcb = "0.7.*"
 palette = "0.2"
+picto = "0.2"
 
 [dependencies.xcb-util]
 version = "0.1"

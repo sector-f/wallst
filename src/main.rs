@@ -1,25 +1,14 @@
 extern crate clap;
-extern crate image;
-extern crate palette;
+extern crate picto;
 extern crate xcb;
 extern crate xcb_util as xcbu;
 
 mod xorg;
 
 use clap::{App, Arg, OsValues};
-// use image::*;
-use image::{
-    DynamicImage,
-    FilterType,
-    GenericImage,
-    ImageError,
-    ImageFormat,
-    load_from_memory,
-    Pixel,
-    Rgba as image_rgba,
-};
-use palette::Gradient;
-use palette::Rgb as palette_rgb;
+use picto::Buffer;
+use picto::color::{Alpha, Gradient, Rgb};
+use picto::Orientation::{Horizontal, Vertical};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, stderr, stdin, Write};
@@ -59,124 +48,22 @@ enum BackgroundMode {
              // Repeat left-to-right if it is too small.
 }
 
-fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
+type rgba_image = picto::Buffer<u8, Rgb, Vec<u8>>;
+
+fn get_image_data(bg: BackgroundOptions) -> Result<rgba_image, picto::Error> {
+    if let Some(_) = bg.path {
+        unimplemented!();
+    }
+
     let colors = bg.colors.clone();
-    let mut image = get_background(colors, bg.w, bg.h);
-
-    if let Some(ref path) = bg.path {
-        let mut buffer = Vec::new();
-        let mut foreground =
-            if path.as_os_str() == "-" {
-                let _ = stdin().read_to_end(&mut buffer);
-                try!(load_from_memory(&buffer))
-            } else {
-                let mut fin = match File::open(path) {
-                    Ok(f) => f,
-                    Err(e) => return Err(ImageError::IoError(e))
-                };
-                let _ = fin.read_to_end(&mut buffer);
-                try!(load_from_memory(&buffer))
-            };
-        foreground = DynamicImage::ImageRgba8(foreground.to_rgba());
-
-        let mut placeholder = image.clone();
-
-        match bg.mode {
-            BackgroundMode::Center => {
-                let img_w = foreground.width();
-                let img_h = foreground.height();
-
-                let left: i32 = (bg.w as i32 - img_w as i32) / 2;
-                let top: i32 = (bg.h as i32 - img_h as i32) / 2;
-
-                foreground = DynamicImage::ImageRgba8(
-                    foreground.sub_image(
-                        if left < 0 { left.abs() as u32 } else { 0 },
-                        if top < 0 { top.abs() as u32 } else { 0 },
-                        if left < 0 { bg.w } else { img_w },
-                        if top < 0 { bg.h } else { img_h },
-                    ).to_image()
-                );
-
-                let x_offset = if left < 0 { 0 } else { left.abs() as u32 };
-                let y_offset = if top < 0 { 0 } else { top.abs() as u32 };
-                placeholder.copy_from(&foreground, x_offset, y_offset);
-            },
-            BackgroundMode::Stretch => {
-                placeholder = foreground.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
-            },
-            BackgroundMode::Fill => {
-                foreground = foreground.resize(bg.w, bg.h, FilterType::Lanczos3);
-                let offset = (bg.w - foreground.width()) / 2;
-                placeholder.copy_from(&foreground, offset, 0);
-            },
-            BackgroundMode::Full => {
-                foreground = foreground.crop(0, 0, bg.w, bg.h);
-                placeholder.copy_from(&foreground, 0, 0);
-            },
-            BackgroundMode::Tile => {
-                // To-Do: Use a SubImage rather than increasing the placeholder size?
-                let img_w = foreground.width();
-                let img_h = foreground.height();
-
-                // I love it when I come across crazy things in source code that
-                // make no sense and have no explanation! Just kidding.
-                // Here's what this does. For both width and height:
-                // If img > bg then the placeholder becomes the img size.
-                // If bg > img then the placeholder becomes the lowest multiple of the
-                // img size that's greater than the bg size.
-                // This is so that copying to the placeholder image actually succeeds.
-
-                placeholder = get_background(
-                    bg.colors,
-                    (img_w * ((bg.w + img_w - 1) / img_w)),
-                    (img_h * ((bg.h + img_h - 1) / img_h)),
-                );
-
-                let mut vert_overlap = 0;
-                while vert_overlap < bg.h {
-                    let mut horiz_overlap = 0;
-                    while horiz_overlap < bg.w {
-                        placeholder.copy_from(&foreground, horiz_overlap, vert_overlap);
-                        horiz_overlap += foreground.width();
-                    }
-                    vert_overlap += foreground.height();
-                }
-
-                placeholder = placeholder.crop(0, 0, bg.w, bg.h);
-            },
-        }
-
-        if let Some(alpha) = bg.alpha {
-            for pixel in placeholder.as_mut_rgba8().unwrap().pixels_mut() {
-                pixel[3] = (pixel[3] as f32 * (alpha as f32 / 255f32)) as u8;
-            }
-        }
-
-        let zipped = image.as_mut_rgba8().unwrap().pixels_mut().zip(
-            placeholder.as_rgba8().unwrap().pixels()
-        );
-
-        for (bg_pix, fg_pix) in zipped {
-            bg_pix.blend(fg_pix);
-        }
-
-    }
-
-    if bg.vflip {
-        image = image.flipv();
-    }
-
-    if bg.hflip {
-        image = image.fliph();
-    }
+    let mut background = get_background(colors, bg.w, bg.h);
 
     if let Some(save_path) = bg.save_path {
         match File::create(&save_path) {
             Ok(mut file) => {
-                if let Err(e) = image.save(&mut file, ImageFormat::PNG) {
+                if let Err(e) = picto::write::png(&file, &background, |_|{()}) {
                     let _ = writeln!(stderr(), "Error saving image: {}", e);
-                }
+               }
             },
             Err(e) => {
                 let _ = writeln!(stderr(), "Failed to save image: {}", e);
@@ -184,7 +71,35 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
         }
     }
 
-    Ok(image)
+    Ok(background)
+}
+
+fn color_from_str(color_str: &str) -> Rgb {
+    let red = u8::from_str_radix(&color_str[1..3], 16).unwrap();
+    let green = u8::from_str_radix(&color_str[3..5], 16).unwrap();
+    let blue = u8::from_str_radix(&color_str[5..7], 16).unwrap();
+    Rgb::new_u8(red, green, blue) as Rgb<f32>
+}
+
+fn get_background<'a>(colors: Option<OsValues<'a>>,
+                  w: u32,
+                  h: u32) -> rgba_image {
+    let colors_vec =
+        colors.iter().flat_map(|c| c.clone().into_iter())
+        .map(|c| color_from_str(&c.to_string_lossy()))
+        .collect::<Vec<_>>();
+
+    let bg_color = match colors_vec.len() {
+        0 => {
+            let black: Rgb = Rgb::new_u8(0, 0, 0);
+            Gradient::new(vec![black])
+        },
+        _ => {
+            Gradient::new(colors_vec)
+        }
+    };
+
+    Buffer::from_gradient(w, h, Horizontal, bg_color)
 }
 
 fn is_valid_color(color: String) -> Result<(), String> {
@@ -208,56 +123,6 @@ fn is_valid_color(color: String) -> Result<(), String> {
     }
 
     Ok(())
-}
-
-fn get_background<'a>(colors: Option<OsValues<'a>>, w: u32, h: u32) -> DynamicImage {
-    let colors_vec: Vec<_> =
-        colors.iter().flat_map(|c| c.clone().into_iter()).collect::<Vec<_>>();
-    match colors_vec.len() {
-        0 => {
-            get_gradient(&["#000000".as_ref()], w, h)
-        },
-        _ => {
-            get_gradient(&colors_vec, w, h)
-        },
-    }
-}
-
-fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
-    let mut image = DynamicImage::new_rgba8(w, h);
-    let gradient = Gradient::new(
-        colors.iter().map(|c|
-            color_from_str(
-                c.to_str().unwrap()
-            )
-        )
-    );
-
-    for (x, color) in (0..w).zip(gradient.take(w as usize)) {
-        for y in 0..h {
-            let foo = srgb(color);
-            image.as_mut_rgba8().unwrap().put_pixel(x, y, foo);
-        }
-    }
-
-    image
-}
-
-fn srgb(value: palette_rgb<f32>) -> image_rgba<u8> {
-    image_rgba { data: [
-        value.red as u8,
-        value.green as u8,
-        value.blue as u8,
-        255,
-    ] }
-}
-
-fn color_from_str(color_str: &str) -> palette_rgb<f32> {
-    palette_rgb::new(
-        u8::from_str_radix(&color_str[1..3], 16).unwrap() as f32,
-        u8::from_str_radix(&color_str[3..5], 16).unwrap() as f32,
-        u8::from_str_radix(&color_str[5..7], 16).unwrap() as f32,
-    )
 }
 
 fn is_alpha(alpha: String) -> Result<(), String> {
