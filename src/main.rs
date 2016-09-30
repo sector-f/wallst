@@ -3,18 +3,20 @@ extern crate picto;
 extern crate xcb;
 extern crate xcb_util as xcbu;
 
+mod coloration;
+mod image;
 mod xorg;
 
 use clap::{App, Arg, OsValues};
-use picto::buffer::{self, Buffer, Rgba as Rgba_image};
-use picto::color::{Alpha, Gradient, Rgb, Rgba};
+use picto::buffer::{self, Buffer, Rgba as RgbaImage};
+use picto::color::{Rgb, Rgba};
 use picto::Orientation::{Horizontal, Vertical};
+use picto::processing::Flip;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, stderr, stdin, Write};
 use std::path::Path;
 use std::u8;
-use xorg::*;
 
 struct BackgroundOptions<'a> {
     path: Option<&'a Path>,
@@ -48,56 +50,45 @@ enum BackgroundMode {
              // Repeat left-to-right if it is too small.
 }
 
-fn get_image_data(bg: BackgroundOptions) -> Result<Rgba_image, picto::Error> {
-    if let Some(_) = bg.path {
+fn get_image_data(options: BackgroundOptions) -> Result<RgbaImage, picto::Error> {
+    if let Some(_) = options.path {
         unimplemented!();
     }
 
-    let colors = bg.colors.clone();
-    let mut background = get_background(colors, bg.w, bg.h);
+    let colors = options.colors.clone();
+    let mut bg = coloration::get_background(colors, options.w, options.h);
 
-    if let Some(save_path) = bg.save_path {
-        match File::create(&save_path) {
-            Ok(mut file) => {
-                if let Err(e) = picto::write::png(&file, &background, |_|{()}) {
-                    let _ = writeln!(stderr(), "Error saving image: {}", e);
-               }
-            },
-            Err(e) => {
-                let _ = writeln!(stderr(), "Failed to save image: {}", e);
-            },
-        }
+    match options.mode {
+        BackgroundMode::Center => {
+            // image::center_image(&mut bg, &mut fg, options.w, options.h);
+        },
+        BackgroundMode::Stretch => {
+            // image::stretch_image(&mut bg, &mut fg, options.w, options.h);
+        },
+        BackgroundMode::Fill => {
+            // image::fill_image(&mut bg, &mut fg, options.w, options.h);
+        },
+        BackgroundMode::Full => {
+            // image::full_image(&mut bg, &mut fg, options.w, options.h);
+        },
+        BackgroundMode::Tile => {
+            // image::tile_image(&mut bg, &mut fg, options.w, options.h);
+        },
     }
 
-    Ok(background)
-}
+    if options.vflip {
+        bg.flip(Vertical);
+    }
 
-fn color_from_str(color_str: &str) -> Rgba {
-    let red = u8::from_str_radix(&color_str[1..3], 16).unwrap();
-    let green = u8::from_str_radix(&color_str[3..5], 16).unwrap();
-    let blue = u8::from_str_radix(&color_str[5..7], 16).unwrap();
-    Rgba::new_u8(red, green, blue, 255)
-}
+    if options.hflip {
+        bg.flip(Horizontal);
+    }
 
-fn get_background<'a>(colors: Option<OsValues<'a>>,
-                  w: u32,
-                  h: u32) -> Rgba_image {
-    let colors_vec =
-        colors.iter().flat_map(|c| c.clone().into_iter())
-        .map(|c| color_from_str(&c.to_string_lossy()))
-        .collect::<Vec<_>>();
+    if let Some(save_path) = options.save_path {
+        image::save_image(&save_path, &bg);
+    }
 
-    let bg_color = match colors_vec.len() {
-        0 => {
-            let black = Rgba::new_u8(0, 0, 0, 0);
-            Gradient::new(vec![black])
-        },
-        _ => {
-            Gradient::new(colors_vec)
-        }
-    };
-
-    Buffer::from_gradient(w, h, Horizontal, bg_color)
+    Ok(bg)
 }
 
 fn is_valid_color(color: String) -> Result<(), String> {
@@ -178,7 +169,7 @@ fn main() {
 
     let (conn, screen_num) = xcb::Connection::connect(matches.value_of("display"))
         .expect("Failed to connect to X server");
-    let screen = get_screen(&conn, screen_num as usize);
+    let screen = xorg::get_screen(&conn, screen_num as usize);
     let w = screen.width_in_pixels();
     let h = screen.height_in_pixels();
 
@@ -217,7 +208,7 @@ fn main() {
     };
 
     match get_image_data(bg_options) {
-        Ok(image) => set_background(&conn, &screen, image),
+        Ok(image) => xorg::set_background(&conn, &screen, image),
         Err(e) => { let _ = writeln!(stderr(), "Error: {}", e); },
     }
 }

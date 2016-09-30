@@ -1,11 +1,9 @@
-// extern crate image;
 extern crate picto;
 extern crate xcb;
 extern crate xcb_util as xcbu;
 
-// use image::*;
 // use picto::color::Rgb;
-use picto::buffer::Rgba as Rgba_image;
+use picto::buffer::Rgba as RgbaImage;
 
 const ATOMS: &'static [&'static str] = &[
     "_XROOTPMAP_ID",
@@ -13,32 +11,9 @@ const ATOMS: &'static [&'static str] = &[
     "ESETROOT_PMAP_ID"
 ];
 
-pub fn clean_root_atoms(conn: &xcb::Connection,
-                        screen: &xcb::Screen) {
-    let ids = ATOMS.iter().map(|atom| {
-        let reply = xcb::get_property(&conn, false, screen.root(),
-            xcb::intern_atom(&conn, false, atom).get_reply().expect("failed to intern atom").atom(),
-            xcb::ATOM_PIXMAP, 0, 1).get_reply();
-
-        match reply {
-            Ok(ref reply) if reply.type_() == xcb::ATOM_PIXMAP => {
-                Some(reply.value()[0])
-            },
-            _ => None,
-        }
-    }).collect::<Vec<Option<xcb::Pixmap>>>();
-
-    if ids.iter().all(Option::is_some) && ids.iter().all(|id| id == ids.first().unwrap()) {
-        xcb::kill_client(&conn, ids.first().unwrap().unwrap());
-    }
-
-    xcb::kill_client(&conn, xcb::KILL_ALL_TEMPORARY);
-    xcb::set_close_down_mode(&conn, xcb::CLOSE_DOWN_RETAIN_TEMPORARY as u8);
-}
-
 pub fn set_background(conn: &xcb::Connection,
                       screen: &xcb::Screen,
-                      image: Rgba_image) {
+                      image: RgbaImage) {
     let w = screen.width_in_pixels();
     let h = screen.height_in_pixels();
 
@@ -80,5 +55,28 @@ pub fn get_screen(conn: &xcb::Connection, display: usize) -> xcb::Screen {
     let mut screen_iter = setup.roots();
     let screen = screen_iter.nth(display).expect("Failed to get screen info");
     return screen
+}
+
+fn clean_root_atoms(conn: &xcb::Connection,
+                        screen: &xcb::Screen) {
+    let ids = ATOMS.iter().map(|atom| {
+        let reply = xcb::get_property(&conn, false, screen.root(),
+            xcb::intern_atom(&conn, false, atom).get_reply().expect("failed to intern atom").atom(),
+            xcb::ATOM_PIXMAP, 0, 1).get_reply();
+
+        match reply {
+            Ok(ref reply) if reply.type_() == xcb::ATOM_PIXMAP => {
+                Some(reply.value()[0])
+            },
+            _ => None,
+        }
+    }).collect::<Vec<Option<xcb::Pixmap>>>();
+
+    if ids.iter().all(Option::is_some) && ids.iter().all(|id| id == ids.first().unwrap()) {
+        xcb::kill_client(&conn, ids.first().unwrap().unwrap());
+    }
+
+    xcb::kill_client(&conn, xcb::KILL_ALL_TEMPORARY);
+    xcb::set_close_down_mode(&conn, xcb::CLOSE_DOWN_RETAIN_TEMPORARY as u8);
 }
 
