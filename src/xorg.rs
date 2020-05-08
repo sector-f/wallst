@@ -46,7 +46,7 @@ pub fn set_background(conn: &xcb::Connection,
         let r = pixel[0] as u32;
         let g = pixel[1] as u32;
         let b = pixel[2] as u32;
-        shm.put(x, y, ((r << 16) | (g << 8) | (b << 0)));
+        shm.put(x, y, (r << 16) | (g << 8) | (b << 0));
     }
 
     let pixmap_id = conn.generate_id();

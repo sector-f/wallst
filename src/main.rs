@@ -129,8 +129,8 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
 
                 placeholder = get_background(
                     bg.colors,
-                    (img_w * ((bg.w + img_w - 1) / img_w)),
-                    (img_h * ((bg.h + img_h - 1) / img_h)),
+                    img_w * ((bg.w + img_w - 1) / img_w),
+                    img_h * ((bg.h + img_h - 1) / img_h),
                 );
 
                 let mut vert_overlap = 0;
