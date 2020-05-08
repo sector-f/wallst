@@ -6,9 +6,9 @@ authors = ["Adam <adamsimeth@gmail.com>"]
 [dependencies]
 clap = "2.33"
 image = "0.10.*"
-xcb = "0.7.*"
+xcb = "0.9"
 palette = "0.2"
 
 [dependencies.xcb-util]
-version = "0.1"
+version = "0.3"
 features = ["image", "shm"]
