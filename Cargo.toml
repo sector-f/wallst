@@ -8,7 +8,7 @@ edition = "2018"
 clap = "2.33"
 image = "0.10.*"
 xcb = "0.9"
-palette = "0.2"
+palette = "0.5"
 
 [dependencies.xcb-util]
 version = "0.3"

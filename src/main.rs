@@ -4,7 +4,7 @@ use clap::{App, Arg, OsValues};
 // use image::*;
 use image::{
     DynamicImage,
-    FilterType,
+    imageops::FilterType,
     GenericImage,
     ImageError,
     ImageFormat,
@@ -13,7 +13,7 @@ use image::{
     Rgba as image_rgba,
 };
 use palette::Gradient;
-use palette::Rgb as palette_rgb;
+use palette::LinSrgb as palette_rgb;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, stderr, stdin, Write};
