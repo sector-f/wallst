@@ -1,6 +1,6 @@
 use xcb_util as xcbu;
 
-use image::*;
+use image::{DynamicImage, GenericImage};
 
 const ATOMS: &'static [&'static str] = &[
     "_XROOTPMAP_ID",
