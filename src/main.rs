@@ -6,8 +6,8 @@ use image::{
     DynamicImage,
     imageops::FilterType,
     GenericImage,
+    GenericImageView,
     ImageError,
-    ImageFormat,
     load_from_memory,
     Pixel,
     Rgba as image_rgba,
@@ -166,15 +166,8 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
     }
 
     if let Some(save_path) = bg.save_path {
-        match File::create(&save_path) {
-            Ok(mut file) => {
-                if let Err(e) = image.save(&mut file, ImageFormat::PNG) {
-                    let _ = writeln!(stderr(), "Error saving image: {}", e);
-                }
-            },
-            Err(e) => {
-                let _ = writeln!(stderr(), "Failed to save image: {}", e);
-            },
+        if let Err(e) = image.save(&save_path) {
+            let _ = writeln!(stderr(), "Error saving image: {}", e);
         }
     }
 
@@ -238,12 +231,12 @@ fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
 }
 
 fn srgb(value: palette_rgb<f32>) -> image_rgba<u8> {
-    image_rgba { data: [
+    image_rgba ( [
         value.red as u8,
         value.green as u8,
         value.blue as u8,
         255,
-    ] }
+    ] )
 }
 
 fn color_from_str(color_str: &str) -> palette_rgb<f32> {
@@ -346,6 +339,9 @@ fn main() {
         hflip: matches.is_present("hflip"),
         save_path: matches.value_of_os("output").map(Path::new),
     };
+    // FIXME: validate save_path file extension to be ".png", otherwise
+    // DynamicImage's save() will not write out a PNG, as the 2nd argument
+    // to specify ImageFormat has been removed.
 
     match get_image_data(bg_options) {
         Ok(image) => set_background(&conn, &screen, &image),

@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33"
-image = "0.10.*"
+image = "0.23"
 xcb = "0.9"
 palette = "0.5"
 
