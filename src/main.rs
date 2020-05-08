@@ -68,14 +68,14 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
         let mut foreground =
             if path.as_os_str() == "-" {
                 let _ = stdin().read_to_end(&mut buffer);
-                try!(load_from_memory(&buffer))
+                load_from_memory(&buffer)?
             } else {
                 let mut fin = match File::open(path) {
                     Ok(f) => f,
                     Err(e) => return Err(ImageError::IoError(e))
                 };
                 let _ = fin.read_to_end(&mut buffer);
-                try!(load_from_memory(&buffer))
+                load_from_memory(&buffer)?
             };
         foreground = DynamicImage::ImageRgba8(foreground.to_rgba());
 
