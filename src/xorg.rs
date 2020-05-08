@@ -1,6 +1,4 @@
-extern crate image;
-extern crate xcb;
-extern crate xcb_util as xcbu;
+use xcb_util as xcbu;
 
 use image::*;
 

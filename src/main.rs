@@ -1,7 +1,3 @@
-extern crate clap;
-extern crate image;
-extern crate palette;
-
 mod xorg;
 
 use clap::{App, Arg, OsValues};
