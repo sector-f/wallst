@@ -1,8 +1,6 @@
 extern crate clap;
 extern crate image;
 extern crate palette;
-extern crate xcb;
-extern crate xcb_util as xcbu;
 
 mod xorg;
 
