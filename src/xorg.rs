@@ -31,6 +31,7 @@ pub fn clean_root_atoms(conn: &xcb::Connection,
     xcb::set_close_down_mode(&conn, xcb::CLOSE_DOWN_RETAIN_TEMPORARY as u8);
 }
 
+#[allow(clippy::many_single_char_names)]
 pub fn set_background(conn: &xcb::Connection,
                       screen: &xcb::Screen,
                       image: &DynamicImage) {
