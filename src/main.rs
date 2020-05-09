@@ -254,6 +254,14 @@ fn is_alpha(alpha: String) -> Result<(), String> {
     }
 }
 
+fn is_png_path(path: String) -> Result<(), String> {
+    if path.ends_with(".png") {
+        Ok(())
+    } else {
+        Err(format!("output file does not have .png extension: {}", path))
+    }
+}
+
 fn main() {
     let matches = App::new("wallst")
         .version(option_env!("CARGO_PKG_VERSION").unwrap_or("unknown"))
@@ -282,10 +290,11 @@ fn main() {
              .takes_value(true)
              .validator(is_alpha))
         .arg(Arg::with_name("output")
-             .help("The path to save the resulting (PNG) image as")
+             .help("The path to save the resulting (PNG) image as. Must have .png extension.")
              .short("o")
              .long("output")
-             .takes_value(true))
+             .takes_value(true)
+             .validator(is_png_path))
         .arg(Arg::with_name("color")
              .help("Set a solid color as the background")
              .short("c")
@@ -339,9 +348,6 @@ fn main() {
         hflip: matches.is_present("hflip"),
         save_path: matches.value_of_os("output").map(Path::new),
     };
-    // FIXME: validate save_path file extension to be ".png", otherwise
-    // DynamicImage's save() will not write out a PNG, as the 2nd argument
-    // to specify ImageFormat has been removed.
 
     match get_image_data(bg_options) {
         Ok(image) => set_background(&conn, &screen, &image),
