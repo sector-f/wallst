@@ -197,9 +197,9 @@ fn is_valid_color(color: String) -> Result<(), String> {
     Ok(())
 }
 
-fn get_background<'a>(colors: Option<OsValues<'a>>, w: u32, h: u32) -> DynamicImage {
+fn get_background(colors: Option<OsValues>, w: u32, h: u32) -> DynamicImage {
     let colors_vec: Vec<_> =
-        colors.iter().flat_map(|c| c.clone().into_iter()).collect::<Vec<_>>();
+        colors.iter().flat_map(|c| c.clone()).collect::<Vec<_>>();
     match colors_vec.len() {
         0 => {
             get_gradient(&["#000000".as_ref()], w, h)
@@ -222,8 +222,8 @@ fn get_gradient(colors: &[&OsStr], w: u32, h: u32) -> DynamicImage {
 
     for (x, color) in (0..w).zip(gradient.take(w as usize)) {
         for y in 0..h {
-            let foo = srgb(color);
-            image.as_mut_rgba8().unwrap().put_pixel(x, y, foo);
+            let c = srgb(color);
+            image.as_mut_rgba8().unwrap().put_pixel(x, y, c);
         }
     }
 

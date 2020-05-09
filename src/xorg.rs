@@ -2,7 +2,7 @@ use xcb_util as xcbu;
 
 use image::{DynamicImage, GenericImageView};
 
-const ATOMS: &'static [&'static str] = &[
+const ATOMS: &[&str] = &[
     "_XROOTPMAP_ID",
     "_XSETROOT_ID",
     "ESETROOT_PMAP_ID"
@@ -44,7 +44,7 @@ pub fn set_background(conn: &xcb::Connection,
         let r = pixel[0] as u32;
         let g = pixel[1] as u32;
         let b = pixel[2] as u32;
-        shm.put(x, y, (r << 16) | (g << 8) | (b << 0));
+        shm.put(x, y, (r << 16) | (g << 8) | b);
     }
 
     let pixmap_id = conn.generate_id();
