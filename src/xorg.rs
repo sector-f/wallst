@@ -66,13 +66,12 @@ pub fn set_background(conn: &xcb::Connection,
     xcb::set_close_down_mode(&conn, xcb::CLOSE_DOWN_RETAIN_TEMPORARY as u8);
     xcb::change_window_attributes(&conn, screen.root(), &[(xcb::CW_BACK_PIXMAP, pixmap_id)]);
     xcb::clear_area(&conn, false, screen.root(), 0, 0, w, h);
-    &conn.flush();
+    conn.flush();
 }
 
 pub fn get_screen(conn: &xcb::Connection, display: usize) -> xcb::Screen {
     let setup = &conn.get_setup();
     let mut screen_iter = setup.roots();
-    let screen = screen_iter.nth(display).expect("Failed to get screen info");
-    return screen
+    screen_iter.nth(display).expect("Failed to get screen info")
 }
 

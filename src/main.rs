@@ -338,12 +338,12 @@ fn main() {
     let alpha = matches.value_of("alpha").map(|a| a.parse::<u8>().unwrap());
 
     let bg_options = BackgroundOptions {
-        path: path,
+        path,
         colors: matches.values_of_os("color"),
-        alpha: alpha,
+        alpha,
         w: w as u32,
         h: h as u32,
-        mode : mode,
+        mode,
         vflip: matches.is_present("vflip"),
         hflip: matches.is_present("hflip"),
         save_path: matches.value_of_os("output").map(Path::new),
