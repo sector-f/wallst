@@ -94,7 +94,7 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
 
                 let x_offset = if left < 0 { 0 } else { left.abs() as u32 };
                 let y_offset = if top < 0 { 0 } else { top.abs() as u32 };
-                placeholder.copy_from(&foreground, x_offset, y_offset);
+                placeholder.copy_from(&foreground, x_offset, y_offset)?;
             },
             BackgroundMode::Stretch => {
                 placeholder = foreground.resize_exact(bg.w, bg.h, FilterType::Lanczos3);
@@ -102,11 +102,11 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
             BackgroundMode::Fill => {
                 foreground = foreground.resize(bg.w, bg.h, FilterType::Lanczos3);
                 let offset = (bg.w - foreground.width()) / 2;
-                placeholder.copy_from(&foreground, offset, 0);
+                placeholder.copy_from(&foreground, offset, 0)?;
             },
             BackgroundMode::Full => {
                 foreground = foreground.crop(0, 0, bg.w, bg.h);
-                placeholder.copy_from(&foreground, 0, 0);
+                placeholder.copy_from(&foreground, 0, 0)?;
             },
             BackgroundMode::Tile => {
                 // To-Do: Use a SubImage rather than increasing the placeholder size?
@@ -131,7 +131,7 @@ fn get_image_data(bg: BackgroundOptions) -> Result<DynamicImage, ImageError> {
                 while vert_overlap < bg.h {
                     let mut horiz_overlap = 0;
                     while horiz_overlap < bg.w {
-                        placeholder.copy_from(&foreground, horiz_overlap, vert_overlap);
+                        placeholder.copy_from(&foreground, horiz_overlap, vert_overlap)?;
                         horiz_overlap += foreground.width();
                     }
                     vert_overlap += foreground.height();
